@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "courses",
     "accounts",
     "progress",
+    "rest_framework",
 ]
 
 MIDDLEWARE = [

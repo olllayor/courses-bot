@@ -27,6 +27,15 @@ class Lesson(models.Model):
     title = models.CharField(max_length=255)
     content = models.TextField(blank=True, null=True)
     is_free = models.BooleanField(default=False)
+    telegram_video_id = models.CharField(
+        max_length=255,
+        blank=False,
+        null=False,
+        help_text="Video ID from Telegram",
+        verbose_name="Telegram Video ID"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.course.title} - {self.title}"
@@ -34,6 +43,7 @@ class Lesson(models.Model):
     class Meta:
         verbose_name = 'Lesson'
         verbose_name_plural = 'Lessons'
+        ordering = ['course', 'id']
 
 class Quiz(models.Model):
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='quizzes')
