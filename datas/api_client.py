@@ -46,3 +46,7 @@ class APIClient:
     async def get_mentor_availability(self, mentor_id: int) -> Optional[List[Dict]]:
         mentor = await self.get_mentor_by_id(mentor_id)
         return mentor.get('availability') if mentor else None
+    
+    async def get_mentor_id_by_name(self, name: str) -> Optional[int]:
+        mentor = await self.get_mentor_by_name(name)
+        return mentor.get('id') if mentor else None

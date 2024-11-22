@@ -66,3 +66,19 @@ async def mentor_booking_keyboard(mentor_name: str):
         resize_keyboard=True,
         one_time_keyboard=True
     )
+    
+async def mentors_menu_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="📚 Courses"),
+            ],
+            [
+                KeyboardButton(text="⏳ Schedule meeting"),
+            ],
+            [
+                KeyboardButton(text="💳 Payment"),
+            ],
+        ],
+        resize_keyboard=True
+    )

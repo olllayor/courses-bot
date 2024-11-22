@@ -80,3 +80,16 @@ async def command_help(message: Message) -> None:
     """Handle /help command"""
     help_text = i18n.get_text(message.from_user.id, 'help')
     await message.answer(help_text)
+
+@router.message(F.photo)
+async def handle_photo(message: Message) -> None:
+    """Handle incoming photos"""
+    # Get photo ID for future reference
+    photo_id = message.photo[-1].file_id
+    
+    # Reply with a message
+    await message.reply(
+        text=f"{photo_id}"
+        # You can also use i18n translation here:
+        # text=i18n.get_text(message.from_user.id, 'photo_received').format(photo_id=photo_id)
+    )

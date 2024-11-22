@@ -8,6 +8,7 @@ uz_texts = {
     'feedback_button': '📤 Fikr-mulohazangiz',
     "choose_action": '👇Tanlang: ',
     'mentor_not_found': "Kechirasiz, mentor ma'lumotlari topilmadi.",
-    'choose_mentor': "Mentorni tanlang:"
+    'choose_mentor': "Mentorni tanlang:",
+    'course': "📚 Kurslar",
     # Add more texts here
 }

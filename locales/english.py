@@ -8,6 +8,7 @@ en_texts = {
     'feedback_button': '📤 Feedback',
     "choose_action": "👇Choose: ",
     'mentor_not_found': "Sorry, mentor information not found.",
-    'choose_mentor': "Choose a mentor:"
+    'choose_mentor': "Choose a mentor:",
+    'course': "📚 Courses",
     # Add more texts here
 }
