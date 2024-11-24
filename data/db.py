@@ -1,5 +1,5 @@
 # datas/db.py
-from datas.api_client import APIClient
+from data.api_client import APIClient
 from typing import List, Dict, Optional
 
 api_client = APIClient()

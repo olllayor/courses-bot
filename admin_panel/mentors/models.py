@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 # Create your models here.
 
@@ -26,7 +27,7 @@ class MentorAvailability(models.Model):
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
     is_available = models.BooleanField(default=True)
-    
+    created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return f"{self.mentor.name} - {self.start_time.strftime('%Y-%m-%d %H:%M')} to {self.end_time.strftime('%Y-%m-%d %H:%M')}"

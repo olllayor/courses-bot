@@ -5,9 +5,9 @@ from django.utils.html import format_html
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ('title', 'mentor')
-    list_filter = ('mentor',)
-    search_fields = ('title', 'mentor__name')
+    list_display = ['title', 'mentor', 'price', 'created_at']
+    list_filter = ['mentor', 'created_at']
+    search_fields = ['title', 'description']
 
 class QuizInline(admin.TabularInline):
     model = Quiz
@@ -15,9 +15,9 @@ class QuizInline(admin.TabularInline):
 
 @admin.register(Lesson)
 class LessonAdmin(admin.ModelAdmin):
-    list_display = ('title', 'course', 'is_free', 'video_status', 'created_at')
-    list_filter = ('course', 'is_free', 'created_at')
-    search_fields = ('title', 'course__title', 'telegram_video_id')
+    list_display = ['title', 'course', 'is_free', 'created_at']
+    list_filter = ['course', 'is_free', 'created_at']
+    search_fields = ['title', 'content']
     readonly_fields = ('created_at', 'updated_at')
     inlines = [QuizInline]
     
@@ -54,10 +54,5 @@ class LessonAdmin(admin.ModelAdmin):
 
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
-    list_display = ('lesson', 'get_question_count')
-    list_filter = ('lesson__course',)
-    search_fields = ('lesson__title',)
-
-    def get_question_count(self, obj):
-        return len(obj.questions)
-    get_question_count.short_description = 'Number of Questions'
+    list_display = ['lesson', 'id']
+    list_filter = ['lesson__course']

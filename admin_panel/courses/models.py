@@ -1,6 +1,7 @@
 # courses/models.py
 from django.db import models
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 from mentors.models import Mentor
 
 class Course(models.Model):
@@ -14,6 +15,7 @@ class Course(models.Model):
         validators=[MinValueValidator(0)],
         help_text="Course price in UZS"
     )
+    created_at = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
         return self.title
@@ -21,6 +23,7 @@ class Course(models.Model):
     class Meta:
         verbose_name = 'Course'
         verbose_name_plural = 'Courses'
+        ordering = ['-created_at']
 
 class Lesson(models.Model):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='lessons')
