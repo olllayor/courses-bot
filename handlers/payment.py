@@ -1,7 +1,9 @@
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
+import aiohttp
 from data.api_client import APIClient
 from keyboards.payment_keyboard import (
     create_screenshot_keyboard,
@@ -79,125 +81,77 @@ async def show_payment_details(message: Message, state: FSMContext):
         logger.error(f"Error showing payment details: {e}")
         await message.answer("An error occurred. Please try again later.")
 
-@router.message(PaymentState.AWAITING_SCREENSHOT, F.photo)
-async def handle_payment_screenshot(message: Message, state: FSMContext):
+@router.message(PaymentState.AWAITING_SCREENSHOT)
+async def handle_screenshot(message: Message, state: FSMContext):
     """Handle payment screenshot submission"""
+    if not message.photo:
+        await message.answer("Please send a screenshot image of your payment.")
+        return
+
     try:
         data = await state.get_data()
-        course_id = data.get("course_id")
-        payment_id = data.get("payment_id")
+        payment_id = data.get('payment_id')
+        
+        # Get the largest photo size
+        photo = message.photo[-1]
+        
+        # Update payment with screenshot
+        async with aiohttp.ClientSession() as session:
+            async with session.put(
+                f"{api_client.base_url}/payments/{payment_id}/save_screenshot/",
+                json={'file_id': photo.file_id}
+            ) as response:
+                response.raise_for_status()
 
-        logger.info(f"Course ID: {course_id}, Payment ID: {payment_id}")    
-
-
-        if not all([course_id, payment_id]):
-            await message.answer("Payment session expired. Please start over.")
-            await state.clear()
-            return
-            
-        course = await api_client.get_course_by_id(course_id)
-        if not course:
-            await message.answer("Course information not found. Please try again.")
-            return
-        
-        logger.info(f"Processing payment screenshot from user {message.from_user.id} for course {course_id}")
-        
-        # Store the file_id in state for later reference
-        await state.update_data(screenshot_file_id=message.photo[-1].file_id)
-        
-        # Forward screenshot to admins
-        admin_msg = (
-            f"🔔 New Payment Confirmation\n\n"
-            f"👤 User: {message.from_user.full_name}\n"
-            f"🆔 User ID: {message.from_user.id}\n"
-            f"📚 Course: {course['title']}\n"
-            f"💰 Amount: {course['price']} UZS\n"
-            f"🆔 Payment ID: {payment_id}"
-        )
-        
+        # Notify admins
         for admin_id in ADMIN_IDS:
             try:
-                await message.bot.send_photo(
-                    chat_id=admin_id,
-                    photo=message.photo[-1].file_id,
-                    caption=admin_msg,
-                    reply_markup=admin_confirmation_keyboard(message.from_user.id, course_id, payment_id)
+                await bot.send_photo(
+                    admin_id,
+                    photo.file_id,
+                    caption=f"New payment screenshot\nPayment ID: {payment_id}"
                 )
+                # Add confirm/reject buttons
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="✅ Confirm", callback_data=f"confirm_{payment_id}"),
+                        InlineKeyboardButton(text="❌ Reject", callback_data=f"reject_{payment_id}")
+                    ]
+                ])
+                await bot.send_message(admin_id, "Please verify the payment:", reply_markup=keyboard)
             except Exception as e:
-                logger.error(f"Failed to send notification to admin {admin_id}: {e}")
-            
-        await message.answer(
-            "✅ Thank you! Your payment screenshot has been submitted for verification.\n"
-            "We will process it as soon as possible. You will be notified once confirmed."
-        )
-        await state.set_state(PaymentState.AWAITING_ADMIN_CONFIRMATION)
-        
-    except Exception as e:
-        logger.error(f"Error handling payment screenshot: {e}")
-        await message.answer("An error occurred processing your payment. Please try again later.")
+                logger.error(f"Failed to notify admin {admin_id}: {e}")
 
-@router.callback_query(F.data.startswith(("confirm_payment_", "reject_payment_")))
-async def handle_admin_payment_action(callback: CallbackQuery, state: FSMContext):
-    """Handle admin's payment confirmation or rejection"""
-    try:
-        action, user_id, course_id, payment_id = callback.data.split('_')
-        user_id, course_id, payment_id = map(int, [user_id, course_id, payment_id])
-        
-        is_confirm = action == "confirm"
-        
-        if str(callback.from_user.id) not in ADMIN_IDS:
-            await callback.answer("You are not authorized to perform this action.", show_alert=True)
-            return
-            
-        if is_confirm:
-            # Update payment status in database
-            if await api_client.confirm_payment(payment_id):
-                await api_client.add_user_purchase(user_id, course_id)
-                
-                # Notify user
-                await bot.send_message(
-                    user_id,
-                    "🎉 Your payment has been confirmed!\n"
-                    "You now have access to all course materials."
-                )
-                
-                # Update admin message
-                await callback.message.edit_caption(
-                    callback.message.caption + "\n\n✅ Payment Confirmed",
-                    reply_markup=None
-                )
-            else:
-                logger.error(f"Failed to confirm payment {payment_id}")
-                await callback.answer("Error confirming payment", show_alert=True)
-                return
-        else:
-            # Handle rejection
-            await bot.send_message(
-                user_id,
-                "❌ Your payment was not approved.\n"
-                "Please ensure you've sent the correct amount and try again."
-            )
-            await callback.message.edit_caption(
-                callback.message.caption + "\n\n❌ Payment Rejected",
-                reply_markup=None
-            )
-            
-        await callback.answer("Payment processed successfully")
-        
-    except Exception as e:
-        logger.error(f"Error handling admin payment action: {e}")
-        await callback.answer("Error processing payment action", show_alert=True)
-
-# Cancel payment handler
-@router.message(PaymentState.AWAITING_SCREENSHOT, F.text == "❌ Cancel Payment")
-async def cancel_payment(message: Message, state: FSMContext):
-    """Handle payment cancellation"""
-    try:
+        await message.answer("Thank you! Your payment is being verified by administrators.")
         await state.clear()
-        await message.answer(
-            "Payment cancelled. You can start over when you're ready.",
-            reply_markup=None
-        )
+
     except Exception as e:
-        logger.error(f"Error cancelling payment: {e}")
-        await message.answer("Error cancelling payment. Please try again.")
+        logger.error(f"Error handling screenshot: {e}")
+        await message.answer("Error processing your screenshot. Please try again.")
+
+@router.callback_query(F.data.startswith(("confirm_", "reject_")))
+async def handle_admin_verification(callback: CallbackQuery):
+    """Handle admin payment verification"""
+    try:
+        action, payment_id = callback.data.split('_')
+        payment_id = int(payment_id)
+        
+        # Update payment status
+        async with aiohttp.ClientSession() as session:
+            endpoint = f"{api_client.base_url}/payments/{payment_id}/"
+            action_endpoint = f"{endpoint}confirm/" if action == "confirm" else f"{endpoint}cancel/"
+            
+            async with session.post(action_endpoint) as response:
+                response.raise_for_status()
+                payment = await response.json()
+
+        # Notify user
+        message = "Your payment has been confirmed! You now have access to the course." if action == "confirm" \
+                 else "Your payment was rejected. Please contact support."
+                 
+        await bot.send_message(payment['student'], message)
+        await callback.answer("Payment status updated")
+
+    except Exception as e:
+        logger.error(f"Error in admin verification: {e}")
+        await callback.answer("Error updating payment status")

@@ -10,13 +10,24 @@ from handlers.mentors import get_mentor_id
 from keyboards.lessons_keyboard import create_lessons_keyboard
 from data.api_client import APIClient
 from states.mentor_state import CourseState, LessonState
+import click
+from rich.logging import RichHandler
 
 router = Router()
 api_client = APIClient()
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)
+
+
 logger = logging.getLogger(__name__)
+# Setup Rich logger with Click suppression
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True, tracebacks_suppress=[click])]
+)
 
 @router.message(F.text.in_(["📚 Courses", "📚 Kurslar"]))
 async def courses(message: Message, state: FSMContext):

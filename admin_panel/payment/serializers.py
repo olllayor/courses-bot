@@ -12,5 +12,5 @@ class PaymentSerializer(serializers.ModelSerializer):
         model = Payment
         fields = ['id', 'student', 'course', 'amount', 'status', 
                  'created_at', 'confirmed_at', 'course_details', 
-                 'student_details']
+                 'student_details', 'screenshot_file_id']
         read_only_fields = ['confirmed_at']

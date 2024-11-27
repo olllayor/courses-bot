@@ -7,7 +7,7 @@ class StudentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Student
-        fields = ['id', 'name', 'phone_number', 'purchased_courses']
+        fields = ['id', 'name', 'telegram_id','phone_number', 'purchased_courses']
 
     def get_purchased_courses(self, obj):
         confirmed_payments = obj.payments.filter(status='confirmed')

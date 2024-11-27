@@ -35,39 +35,51 @@ def get_language_kb() -> InlineKeyboardMarkup:
 async def command_start(message: Message, state: FSMContext) -> None:
     """
     Handle /start command
-    - Clears all states
-    - Creates or updates user in API
-    - Starts language selection
+    - First authenticate with API
+    - Then create/retrieve user
+    - Start language selection flow
     """
     try:
         # Clear all states
         await state.clear()
         logger.info(f"States cleared for user {message.from_user.id}")
         
-        # Save user to API
+        # First authenticate with API
+        auth_token = await api_client.authenticate_user(
+            telegram_id=message.from_user.id,
+            name=message.from_user.full_name
+        )
+        
+        if not auth_token:
+            logger.error("Initial authentication failed")
+            await message.answer("Unable to connect to service. Please try again later.")
+            return
+            
+        # Now try to get or create student with auth token
         try:
-            # Check if user already exists
             existing_student = await api_client.get_student_by_telegram_id(str(message.from_user.id))
             
-            if existing_student:
-                logger.info(f"Student already exists in API: {existing_student['telegram_id']}")
-            else:
+            if not existing_student:
                 student_data = {
                     "name": message.from_user.full_name,
-                    "telegram_id": str(message.from_user.id),
+                    "telegram_id": message.from_user.id,
                     "phone_number": ""
                 }
                 api_student = await api_client.create_student(student_data)
                 
-                if api_student:
-                    logger.info(f"New student created in API: {api_student['telegram_id']}")
-                else:
+                if not api_student:
                     logger.error("Failed to create student in API")
+                    await message.answer("Registration failed. Please try again later.")
+                    return
+                    
+            logger.info(f"Student {'created' if not existing_student else 'retrieved'} successfully")
                     
         except Exception as e:
-            logger.error(f"Failed to save user to API: {str(e)}")
+            logger.error(f"Failed to save/retrieve user: {str(e)}")
+            await message.answer("Error during registration. Please try again.")
+            return
         
-        # Send language selection message
+        # Start language selection
         await message.answer(
             "Tilni tanlang / Choose language:",
             reply_markup=get_language_kb()

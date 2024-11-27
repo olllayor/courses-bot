@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "progress",
     'payment',
     "rest_framework",
+    'rest_framework.authtoken',
 ]
 
 MIDDLEWARE = [
@@ -90,6 +91,14 @@ DATABASES = {
     }
 }
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 
 # Replace the DATABASES section of your settings.py with this
