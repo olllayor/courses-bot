@@ -10,66 +10,42 @@ class APIClient:
     def __init__(self):
         self.base_url = os.getenv('TEST_API_URL')
         self._tokens = {}
+        self._session = None
+    
+    async def get_session(self):
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
-    async def create_student(self, student_data: Dict) -> Optional[Dict]:
-        """
-        Create a new student in the remote API
-
-        Args:
-            student_data (Dict): Dictionary containing student information
-                Required keys:
-                - name: str
-                - telegram_id: str
-                - phone_number: str (can be empty string)
-
-        Returns:
-            Optional[Dict]: Created student data or None if creation fails
-        """
-        url = f"{self.base_url}/students/"
-        headers = self._get_headers(student_data.get('telegram_id'))
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(url, headers=headers, json=student_data) as response:
-                    if response.status == 201:
-                        return await response.json()
-                    else:
-                        print(f"[red]Failed to create student: {response.status} {response.reason}[/red]")
-                        return None
-            except aiohttp.ClientError as e:
-                print(f"[red]ClientError during create_student: {e}[/red]")
-                return None
-            except Exception as e:
-                print(f"[red]Unexpected error during create_student: {e}[/red]")
-                return None
+    async def close(self):
+        if self._session:
+            await self._session.close()
+            self._session = None
 
     async def authenticate_user(self, telegram_id: int, name: str) -> Optional[str]:
         """Authenticate user and get token"""
         url = f"{self.base_url}/students/authenticate/"
         payload = {
-            "telegram_id": telegram_id,
+            "telegram_id": str(telegram_id),
             "name": name
         }
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.post(url, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        token = data.get('token')
-                        if token:
-                            self._tokens[telegram_id] = token
-                            return token
-                        else:
-                            print("[red]Authentication failed: No token returned[/red]")
-                            return None
-                    else:
-                        print(f"[red]Authentication failed: {response.status} {response.reason}[/red]")
-                        return None
-            except aiohttp.ClientError as e:
-                print(f"[red]ClientError during authenticate_user: {e}[/red]")
+        
+        session = await self.get_session()
+        try:
+            async with session.post(url, json=payload) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    token = data.get('token')
+                    if token:
+                        self._tokens[telegram_id] = token
+                        return token
+                    print("Authentication failed: No token returned")
+                    return None
+                print(f"Authentication failed: {response.status} {await response.text()}")
                 return None
-            except Exception as e:
-                print(f"[red]Unexpected error during authenticate_user: {e}[/red]")
-                return None
+        except Exception as e:
+            print(f"Authentication error: {e}")
+            return None
 
     def _get_headers(self, telegram_id: int) -> Dict[str, str]:
         """Get headers with auth token if available"""

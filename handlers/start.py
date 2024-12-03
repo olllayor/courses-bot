@@ -1,5 +1,6 @@
 from aiogram import Router, F
 from aiogram.types import Message
+from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
 from aiogram import Bot, Dispatcher, types, Router
 from aiogram.fsm.context import FSMContext
@@ -32,63 +33,74 @@ def get_language_kb() -> InlineKeyboardMarkup:
 
 
 @router.message(CommandStart())
-# handlers/start.py
-
 async def command_start(message: Message, state: FSMContext) -> None:
     """
-    Handle /start command
-    - First authenticate with API
-    - Then create/retrieve user
-    - Start language selection flow
+    Handle /start command with improved error handling and user flow
     """
     try:
-        # Clear all states
+        # Clear any existing state
         await state.clear()
-        logger.info(f"States cleared for user {message.from_user.id}")
-
-        # Initialize APIClient
+        user_id = message.from_user.id
+        
+        # Initialize API client
         api_client = APIClient()
-
-        # Authenticate user
-        auth_token = await api_client.authenticate_user(
-            telegram_id=message.from_user.id,
-            name=message.from_user.full_name
-        )
-
-        if not auth_token:
-            logger.error("Initial authentication failed")
-            await message.answer("Unable to connect to service. Please try again later.")
-            return
-
-        # Retrieve student details
-        existing_student = await api_client.get_student_by_telegram_id(str(message.from_user.id))
-
-        if not existing_student:
-            student_data = {
-                "name": message.from_user.full_name,
-                "telegram_id": message.from_user.id,
-                "phone_number": ""
-            }
-            api_student = await api_client.create_student(student_data)
-
-            if not api_student:
-                logger.error("Failed to create student in API")
-                await message.answer("Registration failed. Please try again later.")
+        
+        try:
+            # Attempt authentication
+            auth_token = await api_client.authenticate_user(
+                telegram_id=user_id,
+                name=message.from_user.full_name
+            )
+            
+            if not auth_token:
+                await message.answer(
+                    "⚠️ Unable to connect to service. Please try again later.",
+                    parse_mode=ParseMode.HTML
+                )
                 return
+                
+            # Get or create student profile
+            student = await api_client.get_student_by_telegram_id(str(user_id))
+            
+            if not student:
+                # Create new student profile
+                student_data = {
+                    "name": message.from_user.full_name,
+                    "telegram_id": str(user_id),
+                    "phone_number": ""
+                }
+                
+                student = await api_client.create_student(student_data)
+                if not student:
+                    await message.answer(
+                        "⚠️ Unable to create your profile. Please try again later.",
+                        parse_mode=ParseMode.HTML
+                    )
+                    return
+            
+            # Store user data in state
+            await state.update_data(
+                user_id=user_id,
+                auth_token=auth_token,
+                student_id=student.get('id')
+            )
+            
+            # Show language selection
+            await message.answer(
+                "👋 Welcome! Please select your preferred language:",
+                reply_markup=get_language_kb()
+            )
+            
+        except Exception as e:
+            logger.error(f"Error during authentication: {e}")
+            await message.answer(
+                "⚠️ An error occurred. Please try again later.",
+                parse_mode=ParseMode.HTML
+            )
+            
+    finally:
+        await api_client.close()
 
-            logger.info("Student created successfully")
-        else:
-            logger.info("Student retrieved successfully")
-
-        # Start language selection
-        await message.answer(
-            "Tilni tanlang / Choose language:",
-            reply_markup=get_language_kb()
-        )
-
-    except Exception as e:
-        logger.error(f"Error in command_start: {e}")
-        await message.answer("An error occurred. Please try again.")
 
 @router.callback_query(F.data.startswith("lang_"))
 async def handle_language_selection(callback: CallbackQuery, state: FSMContext) -> None:

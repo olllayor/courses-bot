@@ -7,9 +7,12 @@ from loader import dp, bot, i18n
 from config import API_TOKEN
 from handlers import courses, help, lessons, mentors, payment, start
 from utils.set_bot_commands import set_commands
-import middlewares
+from middlewares.auth import AuthMiddleware
 
 logging.basicConfig(level=logging.INFO)
+
+# Register middleware
+dp.message.middleware(AuthMiddleware())
 
 # Include routers instead of dispatchers
 dp.include_router(start.router)
