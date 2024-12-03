@@ -77,7 +77,8 @@ async def command_start(message: Message, state: FSMContext) -> None:
                         parse_mode=ParseMode.HTML
                     )
                     return
-            
+                logger.info(f"Created new student: {student}")
+                
             # Store user data in state
             await state.update_data(
                 user_id=user_id,

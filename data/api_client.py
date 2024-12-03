@@ -54,22 +54,36 @@ class APIClient:
         if token:
             headers["Authorization"] = f"Token {token}"
         return headers
+    
+    async def create_student(self, student_data: dict) -> Optional[Dict]:
+        url = f"{self.base_url}/students/"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=student_data) as response:
+                    if response.status == 201:
+                        return await response.json()
+                    print(f"Failed to create student: {response.status} {await response.text()}")
+                    return None
+        except aiohttp.ClientError as e:
+            print(f"Error creating student: {e}")
+            return None
 
     async def get_student_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
         """Get student details by Telegram ID."""
         url = f"{self.base_url}/students/?telegram_id={telegram_id}"
         headers = self._get_headers(int(telegram_id))
-        async with aiohttp.ClientSession() as session:
-            try:
-                async with session.get(url, headers=headers) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        print(f"[red]Failed to get student: {response.status} {response.reason}[/red]")
-                        return None
-            except aiohttp.ClientError as e:
-                print(f"[red]ClientError during get_student_by_telegram_id: {e}[/red]")
+        
+        session = await self.get_session()
+        try:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data[0] if data else None
+                print(f"Failed to get student: {response.status} {await response.text()}")
                 return None
+        except Exception as e:
+            print(f"Error getting student: {e}")
+            return None
 
     async def update_student(self, student_id: int, update_data: Dict) -> Optional[Dict]:
         """Update existing student information."""

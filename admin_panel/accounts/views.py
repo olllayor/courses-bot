@@ -9,6 +9,13 @@ from .serializers import StudentSerializer
 class StudentViewSet(viewsets.ModelViewSet):
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
+    permission_classes = [AllowAny]  # Allow unauthenticated access
+    
+    def get_queryset(self):
+        telegram_id = self.request.query_params.get('telegram_id')
+        if telegram_id:
+            return Student.objects.filter(telegram_id=telegram_id)
+        return Student.objects.all()
     
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def authenticate(self, request):
