@@ -32,6 +32,8 @@ def get_language_kb() -> InlineKeyboardMarkup:
 
 
 @router.message(CommandStart())
+# handlers/start.py
+
 async def command_start(message: Message, state: FSMContext) -> None:
     """
     Handle /start command
@@ -43,48 +45,47 @@ async def command_start(message: Message, state: FSMContext) -> None:
         # Clear all states
         await state.clear()
         logger.info(f"States cleared for user {message.from_user.id}")
-        
-        # First authenticate with API
+
+        # Initialize APIClient
+        api_client = APIClient()
+
+        # Authenticate user
         auth_token = await api_client.authenticate_user(
             telegram_id=message.from_user.id,
             name=message.from_user.full_name
         )
-        
+
         if not auth_token:
             logger.error("Initial authentication failed")
             await message.answer("Unable to connect to service. Please try again later.")
             return
-            
-        # Now try to get or create student with auth token
-        try:
-            existing_student = await api_client.get_student_by_telegram_id(str(message.from_user.id))
-            
-            if not existing_student:
-                student_data = {
-                    "name": message.from_user.full_name,
-                    "telegram_id": message.from_user.id,
-                    "phone_number": ""
-                }
-                api_student = await api_client.create_student(student_data)
-                
-                if not api_student:
-                    logger.error("Failed to create student in API")
-                    await message.answer("Registration failed. Please try again later.")
-                    return
-                    
-            logger.info(f"Student {'created' if not existing_student else 'retrieved'} successfully")
-                    
-        except Exception as e:
-            logger.error(f"Failed to save/retrieve user: {str(e)}")
-            await message.answer("Error during registration. Please try again.")
-            return
-        
+
+        # Retrieve student details
+        existing_student = await api_client.get_student_by_telegram_id(str(message.from_user.id))
+
+        if not existing_student:
+            student_data = {
+                "name": message.from_user.full_name,
+                "telegram_id": message.from_user.id,
+                "phone_number": ""
+            }
+            api_student = await api_client.create_student(student_data)
+
+            if not api_student:
+                logger.error("Failed to create student in API")
+                await message.answer("Registration failed. Please try again later.")
+                return
+
+            logger.info("Student created successfully")
+        else:
+            logger.info("Student retrieved successfully")
+
         # Start language selection
         await message.answer(
             "Tilni tanlang / Choose language:",
             reply_markup=get_language_kb()
         )
-        
+
     except Exception as e:
         logger.error(f"Error in command_start: {e}")
         await message.answer("An error occurred. Please try again.")
