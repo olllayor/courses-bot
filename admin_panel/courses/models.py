@@ -3,16 +3,17 @@ from django.db import models
 from django.core.validators import MinValueValidator
 from django.utils import timezone
 from mentors.models import Mentor
+from decimal import Decimal
 
 class Course(models.Model):
     mentor = models.ForeignKey(Mentor, on_delete=models.CASCADE, related_name='courses')
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     price = models.DecimalField(
-        max_digits=9,
+        max_digits=10,
         decimal_places=2,
-        default=0.00,  # Add default value
-        validators=[MinValueValidator(0)],
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
         help_text="Course price in UZS"
     )
     created_at = models.DateTimeField(default=timezone.now)

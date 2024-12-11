@@ -1,4 +1,4 @@
-# lessons.py
+# handlers/lessons.py
 import os
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
@@ -6,6 +6,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.enums import ParseMode
 import logging
 
+from handlers.payment import initiate_course_payment
 from keyboards.payment_keyboard import (
     create_payment_keyboard,
     create_screenshot_keyboard,
@@ -47,12 +48,14 @@ async def show_lessons(message: Message, state: FSMContext):
         return
 
     try:
-        course = await api_client.get_course_by_id(course_id)
+        course = await api_client.get_course_by_id(course_id, telegram_id=message.from_user.id)
         if not course:
             await message.answer("Course not found.")
             return
 
         lessons = course.get("lessons", [])
+        logger.info(f"Available lessons: {lessons}")
+
         if not lessons:
             await message.answer("No lessons available for this course yet.")
             return
@@ -61,6 +64,7 @@ async def show_lessons(message: Message, state: FSMContext):
         has_purchased = await api_client.check_user_purchase(
             message.from_user.id, course_id
         )
+        logger.info(f"User has purchased the course: {has_purchased}")
 
         # Create keyboard with lessons and user_id
         keyboard = await create_lessons_keyboard(
@@ -94,161 +98,56 @@ async def show_lessons(message: Message, state: FSMContext):
             "An error occurred while fetching the lessons. Please try again later."
         )
 
+
 @router.message(LessonState.Lesson_ID)
 async def handle_lesson_selection(message: Message, state: FSMContext):
-    """Handle when user selects a specific lesson"""
-    course_id = await get_course_id(state)
-    if not course_id:
-        await message.answer("Please select a course first.")
-        return
-
     try:
-        course = await api_client.get_course_by_id(course_id)
+        course_id = await get_course_id(state)
+        user_id = message.from_user.id
+        user_name = message.from_user.full_name
+
+        course = await api_client.get_course_by_id(course_id, telegram_id=user_id)
         if not course:
             await message.answer("Course not found.")
             return
 
-        # Remove emoji prefix when matching lesson titles
-        lesson_title = (
-            message.text.split(" ", 1)[1]
-            if "🆓" in message.text or "🔒" in message.text
-            else message.text
-        )
-        
+        clean_title = message.text.replace("🆓 ", "").replace("🔒 ", "").strip()
         selected_lesson = next(
-            (
-                lesson
-                for lesson in course["lessons"]
-                if lesson["title"].lower() == lesson_title.lower()
-            ),
-            None,
+            (lesson for lesson in course["lessons"] 
+             if lesson["title"].lower() == clean_title.lower()),
+            None
         )
 
         if not selected_lesson:
-            return  # Silent return for invalid selections
+            await message.answer("Please select a valid lesson.")
+            return
 
-        # Save selected lesson ID in state
         await state.update_data(lesson_id=selected_lesson["id"])
 
-        # Check if user has purchased the course
         has_purchased = await api_client.check_user_purchase(
-            message.from_user.id, course_id
+            user_id, 
+            course_id,
+            name=user_name
         )
-
-        # Show lesson content if it's free or user has purchased
+        
         if selected_lesson["is_free"] or has_purchased:
+            # Send lesson content
             if selected_lesson.get("telegram_video_id"):
-                try:
-                    await message.answer_video(
-                        video=selected_lesson["telegram_video_id"],
-                        caption=f"*{selected_lesson['title']}*\n\n{selected_lesson['content']}",
-                        parse_mode=ParseMode.MARKDOWN,
-                        protect_content=True,
-                    )
-                except Exception as e:
-                    logger.error(f"Error sending video: {e}")
-                    await message.answer("Error playing video. Please try again later.")
+                await message.answer_video(
+                    video=selected_lesson["telegram_video_id"],
+                    caption=f"*{selected_lesson['title']}*\n\n{selected_lesson['content']}",
+                    parse_mode=ParseMode.MARKDOWN,
+                    protect_content=True
+                )
             else:
                 await message.answer(
                     f"*{selected_lesson['title']}*\n\n{selected_lesson['content']}",
-                    parse_mode=ParseMode.MARKDOWN,
+                    parse_mode=ParseMode.MARKDOWN
                 )
         else:
-            # Show purchase prompt for premium lessons
-            await message.answer(
-                "This is a premium lesson. Please purchase the course to access this content.",
-                reply_markup=await create_payment_keyboard(
-                    course_id, price=course["price"], user_id=message.from_user.id
-                ),
-            )
+            # Initiate payment flow
+            await initiate_course_payment(message, state, course)
 
     except Exception as e:
-        logger.error(f"Error handling lesson selection: {e}")
-        await message.answer(
-            "An error occurred while processing your selection. Please try again later."
-        )
-
-@router.callback_query(F.data.startswith("pay_"))
-async def handle_payment(callback: CallbackQuery, state: FSMContext):
-    """Handle payment callback query"""
-    try:
-        # Validate callback data
-        parts = callback.data.split("_")
-        logger.info(f"{parts}")
-        if len(parts) != 3:
-            await callback.answer("Invalid payment data", show_alert=True)
-            return
-
-        _, course_id, user_id = parts
-        try:
-            course_id, user_id = int(course_id), int(user_id)
-        except ValueError:
-            await callback.answer("Invalid payment data", show_alert=True)
-            return
-
-        logger.info(f"User {user_id} is purchasing course {course_id}")
-
-        # Get course details
-        course = await api_client.get_course_by_id(course_id)
-        if not course:
-            await callback.answer("Course not found", show_alert=True)
-            return
-
-        # Check purchase status
-        has_purchased = await api_client.check_user_purchase(user_id, course_id)
-        if has_purchased:
-            await callback.answer(
-                "You have already purchased this course.", show_alert=True
-            )
-            return
-
-        try:
-            # Create payment record
-            payment = await api_client.create_payment(
-                student_id=user_id,
-                course_id=course_id,
-                amount=float(course['price'])
-            )
-            
-            
-            if not payment:
-                logger.error(f"Failed to create payment for user {user_id} and course {course_id}")
-                await callback.answer("Error creating payment record", show_alert=True)
-                return
-
-            payment_id = payment.get('id')
-            if not payment_id:
-                logger.error(f"Payment created but no ID returned: {payment}")
-                await callback.answer("Error processing payment", show_alert=True)
-                return
-
-            logger.info(f"Created payment with ID {payment_id} for user {user_id}")
-            
-            # Save course and payment data to state
-            await state.update_data(
-                course_id=course_id,
-                payment_id=payment_id
-            )
-
-            # Send payment prompt
-            await callback.message.answer(
-                f"To purchase {course['title']}, please transfer {course['price']} UZS to:\n\n"
-                f"Card Number: {CARD_NUMBER}\n"
-                f"Card Owner: {CARD_OWNER}\n\n"
-                "After payment, please send a screenshot of your payment confirmation.\n\n"
-                "⚠️ Important: Make sure your screenshot clearly shows:\n"
-                "• Transaction amount\n"
-                "• Date and time\n"
-                "• Transaction ID/reference number",
-                reply_markup=create_screenshot_keyboard(),
-            )
-            await state.set_state(PaymentState.AWAITING_SCREENSHOT)
-
-        except Exception as e:
-            logger.error(f"Error creating payment record: {e}")
-            await callback.answer("Error processing payment", show_alert=True)
-            return
-
-    except Exception as e:
-        logger.error(f"Error handling payment: {e}", exc_info=True)
-        await callback.answer("Error processing payment", show_alert=True)
+        logger.error(f"Error handling lesson: {e}")
+        await message.answer("An error occurred. Please try again.")
