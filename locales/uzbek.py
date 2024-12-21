@@ -10,5 +10,10 @@ uz_texts = {
     'mentor_not_found': "Kechirasiz, mentor ma'lumotlari topilmadi.",
     'choose_mentor': "Mentorni tanlang:",
     'course': "📚 Kurslar",
+    'schedule_meeting': "⏳ Uchrashuv jadvali",
+    'no_available_slots': "Mavjud bo'lmagan vaqt",
+    'payment': "💳 To'lov",
+    'back_button': "⬅️ Ortga qaytish",
+    'lessons_in_menu': "📖 Darslar",
     # Add more texts here
 }
