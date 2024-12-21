@@ -1,4 +1,5 @@
 # handlers/mentors.py
+from typing import Dict, Any
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
@@ -13,42 +14,20 @@ from keyboards.mentors_keyboard import (
 from data.api_client import APIClient
 from loader import bot
 from states.mentor_state import MentorState
+from utils.filters import MentorNameFilter
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 router = Router()
-api_client = APIClient()
-
-
-class MentorNameFilter(Filter):
-    async def __call__(self, message: Message) -> bool:
-        try:
-            mentors = await api_client.get_mentors(telegram_id=message.from_user.id)
-            if not mentors:
-                return False
-
-            mentor_names = [mentor.get("name", "").lower() for mentor in mentors]
-            message_text = message.text
-
-            if not message_text:
-                return False
-
-            return message_text.lower() in mentor_names
-        except Exception as e:
-            logger.error(f"Error in MentorNameFilter: {e}")
-            return False
 
 
 async def setup_mentors_handler():
-    """Initialize mentors handler and filters"""
     try:
-        # Register message handlers
         router.message.register(
             list_mentors, F.text.in_(["🧑‍🏫 Mentors", "🧑‍🏫 Mentorlar"])
         )
-        router.message.register(mentor_details, MentorNameFilter())
         logger.info("Mentors handlers registered successfully")
     except Exception as e:
         logger.error(f"Error setting up mentors handlers: {e}")
@@ -62,7 +41,7 @@ async def get_mentor_id(state: FSMContext) -> int:
 
 
 @router.message(F.text.in_(["🧑‍🏫 Mentors", "🧑‍🏫 Mentorlar"]))
-async def list_mentors(message: Message, state: FSMContext):
+async def list_mentors(message: Message, state: FSMContext, api_client: APIClient):
     """Display available mentors"""
     try:
         mentors = await api_client.get_mentors(telegram_id=message.from_user.id)
@@ -74,17 +53,37 @@ async def list_mentors(message: Message, state: FSMContext):
         mentors_text = "\n".join(f"👤 {mentor['name']}" for mentor in mentors)
         await message.answer(
             text=f"Here are the available mentors:\n\n{mentors_text}",
-            reply_markup=await mentor_keyboard(telegram_id=message.from_user.id),
+            reply_markup=await mentor_keyboard(
+                telegram_id=message.from_user.id, api_client=api_client
+            ),
         )
     except Exception as e:
         logger.error(f"Error listing mentors: {e}")
         await message.answer("Error fetching mentors list")
-    finally:
-        await api_client.close()
 
 
-@router.message(MentorNameFilter())
-async def mentor_details(message: Message, state: FSMContext):
+@router.message()
+async def mentor_handler(
+    message: Message, state: FSMContext, api_client: APIClient, **kwargs
+):
+    """Handle mentor selection and display details"""
+    # Check if the message matches the filter condition
+    filter_instance = MentorNameFilter()
+    filter_result = await filter_instance(message, api_client=api_client, **kwargs)
+
+    if filter_result:
+        await mentor_details(
+            message, state, api_client, filter_result.get("mentor_name"), **kwargs
+        )
+
+
+async def mentor_details(
+    message: Message,
+    state: FSMContext,
+    api_client: APIClient,
+    mentor_name: str,
+    **kwargs,
+):
     """Handle mentor selection and display details"""
     try:
         mentor_name = message.text.strip()
@@ -127,5 +126,3 @@ async def mentor_details(message: Message, state: FSMContext):
         await message.answer(
             "An error occurred while fetching mentor details. Please try again later."
         )
-    finally:
-        await api_client.close()

@@ -22,15 +22,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 router = Router()
-api_client = APIClient()
-
-ADMIN_IDS = [int(id.strip()) for id in os.getenv('ADMIN_ID', '').split(',')]
+ADMIN_IDS = [int(id.strip()) for id in os.getenv("ADMIN_ID", "").split(",")]
 CARD_NUMBER = os.getenv("CARD_NUMBER")
 CARD_OWNER = os.getenv("CARD_OWNER")
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 async def get_course_id(state: FSMContext) -> int:
     """Helper function to get course_id from state"""
@@ -39,8 +38,9 @@ async def get_course_id(state: FSMContext) -> int:
     logger.info(f"Current course_id: {course_id}")
     return course_id
 
+
 @router.message(CourseState.Course_ID, F.text.in_(["📖 Lessons", "📖 Darslar"]))
-async def show_lessons(message: Message, state: FSMContext):
+async def show_lessons(message: Message, state: FSMContext, api_client: APIClient):
     """Handler to display available lessons for the selected course"""
     course_id = await get_course_id(state)
     if not course_id:
@@ -48,7 +48,9 @@ async def show_lessons(message: Message, state: FSMContext):
         return
 
     try:
-        course = await api_client.get_course_by_id(course_id, telegram_id=message.from_user.id)
+        course = await api_client.get_course_by_id(
+            course_id, telegram_id=message.from_user.id
+        )
         if not course:
             await message.answer("Course not found.")
             return
@@ -78,7 +80,9 @@ async def show_lessons(message: Message, state: FSMContext):
                 + (
                     f"🆓 Free Lesson"
                     if lesson["is_free"]
-                    else "📖 Lesson" if has_purchased else "🔒 Premium Lesson"
+                    else "📖 Lesson"
+                    if has_purchased
+                    else "🔒 Premium Lesson"
                 )
                 for lesson in lessons
             ]
@@ -100,7 +104,9 @@ async def show_lessons(message: Message, state: FSMContext):
 
 
 @router.message(LessonState.Lesson_ID)
-async def handle_lesson_selection(message: Message, state: FSMContext):
+async def handle_lesson_selection(
+    message: Message, state: FSMContext, api_client: APIClient
+):
     try:
         course_id = await get_course_id(state)
         user_id = message.from_user.id
@@ -113,9 +119,12 @@ async def handle_lesson_selection(message: Message, state: FSMContext):
 
         clean_title = message.text.replace("🆓 ", "").replace("🔒 ", "").strip()
         selected_lesson = next(
-            (lesson for lesson in course["lessons"] 
-             if lesson["title"].lower() == clean_title.lower()),
-            None
+            (
+                lesson
+                for lesson in course["lessons"]
+                if lesson["title"].lower() == clean_title.lower()
+            ),
+            None,
         )
 
         if not selected_lesson:
@@ -125,11 +134,9 @@ async def handle_lesson_selection(message: Message, state: FSMContext):
         await state.update_data(lesson_id=selected_lesson["id"])
 
         has_purchased = await api_client.check_user_purchase(
-            user_id, 
-            course_id,
-            name=user_name
+            user_id, course_id, name=user_name
         )
-        
+
         if selected_lesson["is_free"] or has_purchased:
             # Send lesson content
             if selected_lesson.get("telegram_video_id"):
@@ -137,16 +144,16 @@ async def handle_lesson_selection(message: Message, state: FSMContext):
                     video=selected_lesson["telegram_video_id"],
                     caption=f"*{selected_lesson['title']}*\n\n{selected_lesson['content']}",
                     parse_mode=ParseMode.MARKDOWN,
-                    protect_content=True
+                    protect_content=True,
                 )
             else:
                 await message.answer(
                     f"*{selected_lesson['title']}*\n\n{selected_lesson['content']}",
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.MARKDOWN,
                 )
         else:
             # Initiate payment flow
-            await initiate_course_payment(message, state, course)
+            await initiate_course_payment(message, state, course, api_client)
 
     except Exception as e:
         logger.error(f"Error handling lesson: {e}")

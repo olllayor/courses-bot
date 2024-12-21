@@ -15,5 +15,6 @@ uz_texts = {
     'payment': "💳 To'lov",
     'back_button': "⬅️ Ortga qaytish",
     'lessons_in_menu': "📖 Darslar",
+    'back_to_courses': "⬅️ Kurslarga qaytish",
     # Add more texts here
 }

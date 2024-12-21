@@ -1,3 +1,4 @@
+# handlers/payment.py
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
@@ -20,7 +21,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 router = Router()
-api_client = APIClient()
 
 # Convert ADMIN_IDS string to list of integers
 ADMIN_IDS = [int(id.strip()) for id in os.getenv("ADMIN_ID", "").split(",")]
@@ -79,7 +79,9 @@ async def notify_admins(bot, photo_id: str, payment_info: dict):
     return success_count > 0
 
 
-async def initiate_course_payment(message: Message, state: FSMContext, course: dict):
+async def initiate_course_payment(
+    message: Message, state: FSMContext, course: dict, api_client: APIClient
+):
     """Shared helper to initiate course payment flow"""
     try:
         # Ensure user is authenticated
@@ -128,7 +130,9 @@ async def initiate_course_payment(message: Message, state: FSMContext, course: d
 
 
 @router.message(F.text.in_(["💳 Payment", "💳 To'lov"]))
-async def show_payment_details(message: Message, state: FSMContext):
+async def show_payment_details(
+    message: Message, state: FSMContext, api_client: APIClient
+):
     """Show payment details and ask for screenshot"""
     try:
         data = await state.get_data()
@@ -156,7 +160,10 @@ async def show_payment_details(message: Message, state: FSMContext):
 
         # Create payment record
         payment = await api_client.create_payment(
-            student_id=message.from_user.id, course_id=course_id, amount=course["price"]
+            student_id=message.from_user.id,
+            course_id=course_id,
+            amount=course["price"],
+            telegram_id=message.from_user.id,
         )
 
         if not payment:
@@ -192,7 +199,7 @@ async def show_payment_details(message: Message, state: FSMContext):
 
 
 @router.message(PaymentState.AWAITING_SCREENSHOT)
-async def handle_screenshot(message: Message, state: FSMContext):
+async def handle_screenshot(message: Message, state: FSMContext, api_client: APIClient):
     """Handle payment screenshot submission"""
     try:
         if message.text == "❌ Cancel Payment":
@@ -252,7 +259,7 @@ async def handle_screenshot(message: Message, state: FSMContext):
 
 
 @router.callback_query(F.data.startswith(("confirm_payment_", "reject_payment_")))
-async def handle_admin_verification(callback: CallbackQuery):
+async def handle_admin_verification(callback: CallbackQuery, api_client: APIClient):
     """Handle admin payment verification"""
     try:
         # Validate admin
@@ -262,6 +269,19 @@ async def handle_admin_verification(callback: CallbackQuery):
 
         action, payment_id = callback.data.split("_payment_")
         is_confirm = action == "confirm"
+
+        # Get payment details before updating
+        payment_details = await api_client.get_payment_details(
+            payment_id, callback.from_user.id
+        )
+
+        if not payment_details:
+            await callback.answer("Payment details not found", show_alert=True)
+            return
+
+        if payment_details.get("status") != "pending":
+            await callback.answer("Payment already processed.", show_alert=True)
+            return
 
         # Update payment status
         result = await api_client.make_authenticated_request(

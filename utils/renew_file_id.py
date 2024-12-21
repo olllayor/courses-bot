@@ -2,8 +2,6 @@ import logging
 from data.api_client import APIClient
 
 logger = logging.getLogger(__name__)
-api_client = APIClient()
-
 
 
 async def update_mentor_photo_id(mentor_id: int, new_photo_id: str, new_unique_id: str, api_client: APIClient) -> bool:
@@ -15,6 +13,7 @@ async def update_mentor_photo_id(mentor_id: int, new_photo_id: str, new_unique_i
                 "profile_picture_id": new_photo_id,
                 "profile_picture_unique_id": new_unique_id
             }
+             
         )
         logger.info(f"Updated photo IDs for mentor {mentor_id}")
         return True

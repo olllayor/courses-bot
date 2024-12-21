@@ -2,12 +2,12 @@
 from typing import Any, Callable, Dict, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
+from aiogram.filters import Command
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-# middlewares/auth.py
 class AuthMiddleware(BaseMiddleware):
     def __init__(self, api_client):
         self.api_client = api_client
@@ -21,10 +21,13 @@ class AuthMiddleware(BaseMiddleware):
     ) -> Any:
         # Skip auth for /start command
         if isinstance(event, Message) and event.text and event.text == "/start":
+            data["api_client"] = self.api_client # Add api_client to data even for start command
             return await handler(event, data)
 
         try:
             user_id = event.from_user.id
+            
+            # Ensure the user is authenticated
             authenticated = await self.api_client.ensure_authenticated(
                 telegram_id=user_id, name=event.from_user.full_name
             )

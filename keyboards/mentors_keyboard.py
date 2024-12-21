@@ -1,12 +1,11 @@
+# keyboards/mentors_keyboard.py
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from data.db import fetch_mentor_details, fetch_mentors
 from data.api_client import APIClient
 from loader import i18n
 from typing import List, Dict, Optional
 import logging
 
 logger = logging.getLogger(__name__)
-api_client = APIClient()
 
 
 # Utility: Create rows of buttons
@@ -36,41 +35,49 @@ def create_button_rows(
 
 
 # Mentor List Keyboard
-async def mentor_keyboard(telegram_id: int = None) -> ReplyKeyboardMarkup:
+async def mentor_keyboard(
+    telegram_id: int = None, api_client: APIClient = None
+) -> ReplyKeyboardMarkup:
     """Creates a keyboard to display all mentors."""
     try:
         if not telegram_id:
             logger.error("telegram_id is required for mentor_keyboard")
             return ReplyKeyboardMarkup(
                 keyboard=[[KeyboardButton(text="⚠️ Authentication required")]],
-                resize_keyboard=True
+                resize_keyboard=True,
+            )
+
+        if not api_client:
+            logger.error("api_client is required for mentor_keyboard")
+            return ReplyKeyboardMarkup(
+                keyboard=[[KeyboardButton(text="⚠️ API client is not available")]],
+                resize_keyboard=True,
             )
 
         mentors = await api_client.get_mentors(telegram_id=telegram_id)
-        
+
         if not mentors:
             logger.warning("No mentors found")
             return ReplyKeyboardMarkup(
                 keyboard=[[KeyboardButton(text="No mentors available")]],
-                resize_keyboard=True
+                resize_keyboard=True,
             )
 
         mentor_names = [mentor["name"] for mentor in mentors]
         buttons = create_button_rows(mentor_names)
-        return ReplyKeyboardMarkup(
-            keyboard=buttons,
-            resize_keyboard=True
-        )
+        return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
     except Exception as e:
         logger.error(f"Error creating mentor keyboard: {e}")
         return ReplyKeyboardMarkup(
             keyboard=[[KeyboardButton(text="⚠️ Error fetching mentors")]],
-            resize_keyboard=True
+            resize_keyboard=True,
         )
 
 
 # Mentor Booking Keyboard
-async def mentor_booking_keyboard(mentor_name: str) -> Optional[ReplyKeyboardMarkup]:
+async def mentor_booking_keyboard(
+    mentor_name: str, api_client: APIClient
+) -> Optional[ReplyKeyboardMarkup]:
     """
     Creates a keyboard for mentor booking based on their availability.
 
@@ -81,7 +88,7 @@ async def mentor_booking_keyboard(mentor_name: str) -> Optional[ReplyKeyboardMar
         ReplyKeyboardMarkup or None if no slots are available.
     """
     try:
-        mentor = await fetch_mentor_details(mentor_name)
+        mentor = await api_client.get_mentor_by_name(mentor_name)
         if not mentor or not mentor.get("availability"):
             return None
 

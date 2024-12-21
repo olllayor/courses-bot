@@ -1,4 +1,5 @@
 # app.py
+# app.py
 import logging
 from aiogram import Bot, Dispatcher, types, Router
 from aiogram.filters import Command
@@ -50,8 +51,9 @@ async def main():
     except Exception as e:
         logger.critical(f"Unhandled exception in bot: {e}", exc_info=True)
     finally:
-        await api_client.close()
-        logger.info("Bot shutdown complete.")
+        if "api_client" in locals() and api_client:
+            await api_client.close()
+            logger.info("Bot shutdown complete.")
 
 
 if __name__ == "__main__":

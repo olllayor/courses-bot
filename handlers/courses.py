@@ -1,6 +1,5 @@
 # handlers/courses.py
 import logging
-
 import click
 from aiogram import F, Router
 from aiogram.enums import ParseMode
@@ -8,20 +7,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from rich.logging import RichHandler
 
-from data.api_client import APIClient
+from data.api_client import APIClient  # Import APIClient
 from handlers.mentors import get_mentor_id
 from keyboards.lessons_keyboard import create_lessons_keyboard
 from keyboards.mentors_keyboard import mentor_courses
 from states.mentor_state import CourseState, LessonState
 
 router = Router()
-api_client = APIClient()
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)
-
-
 logger = logging.getLogger(__name__)
+
 # Setup Rich logger with Click suppression
 logging.basicConfig(
     level=logging.INFO,
@@ -32,8 +29,10 @@ logging.basicConfig(
 
 
 @router.message(F.text.in_(["📚 Courses", "📚 Kurslar"]))
-async def courses(message: Message, state: FSMContext):
+async def courses(message: Message, state: FSMContext, api_client: APIClient):
     """Handler to display available courses for the selected mentor"""
+    await message.answer("Fetching courses...")
+
     try:
         mentor_id = await get_mentor_id(state)
         logger.info(f"Fetching courses for mentor_id: {mentor_id}")
@@ -44,7 +43,6 @@ async def courses(message: Message, state: FSMContext):
 
         courses = await api_client.get_courses_by_mentor_id(mentor_id)
 
-        # logger.info(f"Available courses: {courses}")
         if not courses:
             await message.answer("No courses available at the moment.")
             return
@@ -67,18 +65,16 @@ async def courses(message: Message, state: FSMContext):
     except Exception as e:
         logger.error(f"Error in courses handler: {e}")
         await message.answer("An error occurred while fetching courses.")
-    finally:
-        await api_client.close()  # Ensure session is closed
 
 
 # handlers/courses.py
 @router.message(CourseState.Course_ID)
-async def handle_course_selection(message: Message, state: FSMContext):
+async def handle_course_selection(message: Message, state: FSMContext, api_client: APIClient):
     try:
         # Handle back button
         if message.text in ["⬅️ Back to Courses", "⬅️ Kurslarga qaytish"]:
             await state.set_state(CourseState.Course_ID)
-            return await courses(message, state)
+            return await courses(message, state, api_client)
 
         mentor_id = await get_mentor_id(state)
         user_id = message.from_user.id
@@ -113,8 +109,6 @@ async def handle_course_selection(message: Message, state: FSMContext):
         logger.info(f"User has purchased: {has_purchased}")
 
         lessons = selected_course.get("lessons", [])
-
-        # logger.info(f"Lessons: {lessons}")
 
         if not lessons:
             await message.answer("No lessons available for this course.")

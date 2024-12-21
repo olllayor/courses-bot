@@ -23,7 +23,6 @@ import logging
 
 
 router = Router()
-api_client = APIClient()
 logger = logging.getLogger(__name__)
 
 class MediaState(StatesGroup):
@@ -42,10 +41,21 @@ def get_language_kb() -> InlineKeyboardMarkup:
 
 # handlers/start.py
 @router.message(Command("start"))
-async def command_start(message: Message, state: FSMContext) -> None:
+async def command_start(message: Message, state: FSMContext, api_client: APIClient) -> None:
     try:
-        await state.clear()
         user_id = message.from_user.id
+         # Check if there's already a valid token in state
+        state_data = await state.get_data()
+        if state_data.get("auth_token") and state_data.get("user_id") == user_id:
+            logger.info(f"User {user_id} already logged in with a valid token.")
+            # Send menu keyboard in a new message
+            await message.answer(
+                i18n.get_text(user_id, "choose_action"),
+                reply_markup=menu_keyboard(user_id),
+            )
+            return
+
+        await state.clear()
 
         # Initialize API client and authenticate
         authenticated = await api_client.authenticate_user(
@@ -77,8 +87,6 @@ async def command_start(message: Message, state: FSMContext) -> None:
     except Exception as e:
         logger.error(f"Error during start: {e}")
         await message.answer("⚠️ An error occurred. Please try again later.")
-    finally:
-        await api_client.close()
 
 
 @router.callback_query(F.data.startswith("lang_"))
