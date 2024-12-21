@@ -16,6 +16,7 @@ from aiogram.types import (
     InlineKeyboardButton,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.fsm.state import State, StatesGroup
 from states.settings import BotSettings
 from states.mentor_state import MentorState, CourseState
 import logging
@@ -24,6 +25,10 @@ import logging
 router = Router()
 api_client = APIClient()
 logger = logging.getLogger(__name__)
+
+class MediaState(StatesGroup):
+    waiting_for_photo = State()
+    waiting_for_video = State()
 
 
 def get_language_kb() -> InlineKeyboardMarkup:
@@ -133,3 +138,58 @@ async def command_help(message: Message) -> None:
     except Exception as e:
         logger.error(f"Error in command_help: {e}")
         await message.answer("An error occurred. Please try again.")
+
+
+@router.message(Command("image"))
+async def command_image(message: Message, state: FSMContext) -> None:
+    """Handle /image command"""
+    try:
+        await message.answer("Please send me a photo 📸")
+        await state.set_state(MediaState.waiting_for_photo)
+    except Exception as e:
+        logger.error(f"Error in command_image: {e}")
+        await message.answer("⚠️ An error occurred. Please try again.")
+
+@router.message(MediaState.waiting_for_photo, F.photo)
+async def handle_photo(message: Message, state: FSMContext) -> None:
+    """Handle received photo"""
+    try:
+        # Get the file_id of the largest photo size
+        file_id = message.photo[-1].file_id
+        
+        # Send the file_id back to the user
+        await message.answer(f"Photo received!\nFile ID: `{file_id}`", parse_mode=ParseMode.MARKDOWN)
+        
+        # Clear the state
+        await state.clear()
+    except Exception as e:
+        logger.error(f"Error in handle_photo: {e}")
+        await message.answer("⚠️ An error occurred while processing the photo.")
+        await state.clear()
+
+@router.message(Command("video"))
+async def command_video(message: Message, state: FSMContext) -> None:
+    """Handle /video command"""
+    try:
+        await message.answer("Please send me a video 📹")
+        await state.set_state(MediaState.waiting_for_video)
+    except Exception as e:
+        logger.error(f"Error in command_video: {e}")
+        await message.answer("⚠️ An error occurred. Please try again.")
+
+@router.message(MediaState.waiting_for_video, F.video)
+async def handle_video(message: Message, state: FSMContext) -> None:
+    """Handle received video"""
+    try:
+        # Get the file_id of the video
+        file_id = message.video.file_id
+        
+        # Send the file_id back to the user
+        await message.answer(f"Video received!\nFile ID: `{file_id}`", parse_mode=ParseMode.MARKDOWN)
+        
+        # Clear the state
+        await state.clear()
+    except Exception as e:
+        logger.error(f"Error in handle_video: {e}")
+        await message.answer("⚠️ An error occurred while processing the video.")
+        await state.clear()
