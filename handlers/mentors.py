@@ -62,7 +62,7 @@ async def list_mentors(message: Message, state: FSMContext, api_client: APIClien
         await message.answer("Error fetching mentors list")
 
 
-@router.message()
+@router.message(MentorNameFilter())
 async def mentor_handler(
     message: Message, state: FSMContext, api_client: APIClient, **kwargs
 ):
@@ -73,7 +73,12 @@ async def mentor_handler(
 
     if filter_result:
         await mentor_details(
-            message, state, api_client, filter_result.get("mentor_name"), **kwargs
+            message,
+            state,
+            api_client,
+            filter_result.get("mentor_name"),
+            state=state,
+            **kwargs,
         )
 
 
@@ -86,7 +91,6 @@ async def mentor_details(
 ):
     """Handle mentor selection and display details"""
     try:
-        mentor_name = message.text.strip()
         mentor = await api_client.get_mentor_by_name(mentor_name)
 
         if not mentor:

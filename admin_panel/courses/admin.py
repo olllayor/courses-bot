@@ -18,7 +18,7 @@ class QuizInline(admin.TabularInline):
 
 @admin.register(Lesson)
 class LessonAdmin(admin.ModelAdmin):
-    list_display = ["title", "course", "is_free", "created_at", "video_status"]
+    list_display = ["title", "is_free", "course", "created_at", "video_status"]
     list_filter = ["course", "is_free", "created_at"]
     search_fields = ["title", "content"]
     readonly_fields = ("created_at", "updated_at")

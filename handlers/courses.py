@@ -8,9 +8,9 @@ from aiogram.types import Message
 from rich.logging import RichHandler
 
 from data.api_client import APIClient  # Import APIClient
-from handlers.mentors import get_mentor_id
+from handlers.mentors import get_mentor_id, list_mentors
 from keyboards.lessons_keyboard import create_lessons_keyboard
-from keyboards.mentors_keyboard import mentor_courses
+from keyboards.mentors_keyboard import mentor_courses, mentor_keyboard
 from states.mentor_state import CourseState, LessonState
 
 router = Router()
@@ -31,14 +31,26 @@ logging.basicConfig(
 @router.message(F.text.in_(["📚 Courses", "📚 Kurslar"]))
 async def courses(message: Message, state: FSMContext, api_client: APIClient):
     """Handler to display available courses for the selected mentor"""
+    logger.info("Courses handler triggered")
     await message.answer("Fetching courses...")
+
+    #Debug state data
+    state_data = await state.get_data()
+    logger.info(f"State data: {state_data}")
 
     try:
         mentor_id = await get_mentor_id(state)
         logger.info(f"Fetching courses for mentor_id: {mentor_id}")
 
         if not mentor_id:
-            await message.answer("Please select a mentor first.")
+            logger.warning("No mentor_id found in state")
+            await message.answer(
+                "Please select a mentor first.", 
+                reply_markup=await mentor_keyboard(
+                    telegram_id=message.from_user.id, 
+                    api_client=api_client
+                )
+            )
             return
 
         courses = await api_client.get_courses_by_mentor_id(mentor_id)
@@ -67,7 +79,6 @@ async def courses(message: Message, state: FSMContext, api_client: APIClient):
         await message.answer("An error occurred while fetching courses.")
 
 
-# handlers/courses.py
 @router.message(CourseState.Course_ID)
 async def handle_course_selection(message: Message, state: FSMContext, api_client: APIClient):
     try:

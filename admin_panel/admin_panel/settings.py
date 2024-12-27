@@ -52,7 +52,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    "api_analytics.django.Analytics",
+    # "api_analytics.django.Analytics",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
