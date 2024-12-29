@@ -87,22 +87,12 @@ WSGI_APPLICATION = "admin_panel.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-
-
-DATABASE_URL = os.getenv('DATABASE_URL')  # Get the Railway PostgreSQL URL
-
-if DATABASE_URL:
-    db_info = urlparse(DATABASE_URL)
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': db_info.path[1:],  # Database name
-            'USER': db_info.username,  # Database user
-            'PASSWORD': db_info.password,  # Database password
-            'HOST': db_info.hostname,  # Database host
-            'PORT': db_info.port,  # Database port
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
+}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
