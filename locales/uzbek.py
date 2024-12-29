@@ -18,5 +18,7 @@ uz_texts = {
     'lessons_in_menu': "📖 Darslar",
     'back_to_courses': "⬅️ Kurslarga qaytish", 
     'about_project': "ℹ️ Loyiha haqida",
+    'back_to_main_menu': "⬅️ Asosiy menyuga qaytish",
+    "back_to_webinars": "⬅️ Vebinarlarga qaytish",
     # Add more texts here
 }

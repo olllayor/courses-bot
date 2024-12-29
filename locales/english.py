@@ -18,5 +18,7 @@ en_texts = {
     "lessons_in_menu": "📖 Lessons",
     "back_to_courses": "⬅️ Back to Courses",
     "about_project": "ℹ️ About Project",
+    "back_to_main_menu": "⬅️ Back to Main Menu",
+    "back_to_webinars": "⬅️ Back to Webinars",
     # Add more texts here
 }

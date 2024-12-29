@@ -25,6 +25,7 @@ import logging
 router = Router()
 logger = logging.getLogger(__name__)
 
+
 class MediaState(StatesGroup):
     waiting_for_photo = State()
     waiting_for_video = State()
@@ -41,10 +42,12 @@ def get_language_kb() -> InlineKeyboardMarkup:
 
 # handlers/start.py
 @router.message(Command("start"))
-async def command_start(message: Message, state: FSMContext, api_client: APIClient) -> None:
+async def command_start(
+    message: Message, state: FSMContext, api_client: APIClient
+) -> None:
     try:
         user_id = message.from_user.id
-         # Check if there's already a valid token in state
+        # Check if there's already a valid token in state
         state_data = await state.get_data()
         if state_data.get("auth_token") and state_data.get("user_id") == user_id:
             logger.info(f"User {user_id} already logged in with a valid token.")
@@ -158,22 +161,26 @@ async def command_image(message: Message, state: FSMContext) -> None:
         logger.error(f"Error in command_image: {e}")
         await message.answer("⚠️ An error occurred. Please try again.")
 
+
 @router.message(MediaState.waiting_for_photo, F.photo)
 async def handle_photo(message: Message, state: FSMContext) -> None:
     """Handle received photo"""
     try:
         # Get the file_id of the largest photo size
         file_id = message.photo[-1].file_id
-        
+
         # Send the file_id back to the user
-        await message.answer(f"Photo received!\nFile ID: `{file_id}`", parse_mode=ParseMode.MARKDOWN)
-        
+        await message.answer(
+            f"Photo received!\nFile ID: `{file_id}`", parse_mode=ParseMode.MARKDOWN
+        )
+
         # Clear the state
         await state.clear()
     except Exception as e:
         logger.error(f"Error in handle_photo: {e}")
         await message.answer("⚠️ An error occurred while processing the photo.")
         await state.clear()
+
 
 @router.message(Command("video"))
 async def command_video(message: Message, state: FSMContext) -> None:
@@ -185,19 +192,33 @@ async def command_video(message: Message, state: FSMContext) -> None:
         logger.error(f"Error in command_video: {e}")
         await message.answer("⚠️ An error occurred. Please try again.")
 
+
 @router.message(MediaState.waiting_for_video, F.video)
 async def handle_video(message: Message, state: FSMContext) -> None:
     """Handle received video"""
     try:
         # Get the file_id of the video
         file_id = message.video.file_id
-        
+
         # Send the file_id back to the user
-        await message.answer(f"Video received!\nFile ID: `{file_id}`", parse_mode=ParseMode.MARKDOWN)
-        
+        await message.answer(
+            f"Video received!\nFile ID: `{file_id}`", parse_mode=ParseMode.MARKDOWN
+        )
+
         # Clear the state
         await state.clear()
     except Exception as e:
         logger.error(f"Error in handle_video: {e}")
         await message.answer("⚠️ An error occurred while processing the video.")
         await state.clear()
+
+
+@router.message(Command("test"))
+async def command_test(message: Message) -> None:
+    """Handle /test command"""
+    try:
+        await message.answer("This is a test command.")
+        await message.answer_video("BAACAgIAAxkBAAIBXGdw2iLUGi4hdx71pGclyftOaexDAAKyagACTl1BSxt80L0INJroNgQ", caption="Test video")
+    except Exception as e:
+        logger.error(f"Error in command_test: {e}")
+        await message.answer("An error occurred. Please try again.")

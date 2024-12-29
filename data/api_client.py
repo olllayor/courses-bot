@@ -5,6 +5,7 @@ import logging
 from typing import Any, List, Dict, Optional
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
+from rich import print
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -477,9 +478,9 @@ class APIClient:
             logger.error(f"Error updating lesson {lesson_id}: {e}")
             return None
 
-        
-
-    async def get_webinars(self, telegram_id: int, mentor_id: int = None) -> List[Dict]:
+    async def get_webinars(
+        self, telegram_id: int, mentor_id: int = None
+    ) -> Optional[List[Dict]]:
         """
         Get webinars with optional mentor filter.
 
@@ -496,8 +497,12 @@ class APIClient:
                 params["mentor"] = mentor_id
 
             result = await self.make_authenticated_request(
-                "GET", f"{self.base_url}/webinars/", telegram_id=telegram_id, params=params
+                "GET",
+                f"{self.base_url}/webinars/",
+                telegram_id=telegram_id,
+                params=params,
             )
+
 
             if isinstance(result, dict):
                 # Handle paginated response
@@ -505,8 +510,8 @@ class APIClient:
             elif isinstance(result, list):
                 # Handle non-paginated response
                 return result
-            return []
+            return None
 
         except Exception as e:
             logger.error(f"Error fetching webinars: {e}")
-            return []
+            return None
