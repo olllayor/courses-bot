@@ -1,3 +1,4 @@
+# data/api_client.py
 import asyncio
 import aiohttp
 import os
@@ -204,6 +205,23 @@ class APIClient:
             logger.error(f"Authentication error: {e}")
             return False
 
+    async def is_user_registered(self, telegram_id: int) -> bool:
+        """
+        Check if a user is already registered in the database.
+
+        Args:
+            telegram_id: The user's Telegram ID.
+
+        Returns:
+            True if the user is registered, otherwise False.
+        """
+        try:
+            student = await self.get_student_by_telegram_id(telegram_id)
+            return student is not None
+        except Exception as e:
+            logger.error(f"Error checking user registration: {e}")
+            return False
+
     async def get_mentors(self, telegram_id: int) -> list:
         """Get mentors with proper session management"""
         if not telegram_id:
@@ -229,55 +247,139 @@ class APIClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def create_student(self, student_data: dict) -> Optional[Dict]:
-        url = f"{self.base_url}/students/"
-        session = await self.get_session()
+    async def create_student(self, student_data: dict) -> bool:
+        """
+        Save the student's information to the database.
+
+        Args:
+            student_data: A dictionary containing the student's information.
+
+        Returns:
+            True if the student was saved successfully, otherwise False.
+        """
         try:
+            session = await self.get_session()
+            url = f"{self.base_url}/students/"
+            logger.info(f"Sending request to {url} with data: {student_data}")
+
             async with session.post(url, json=student_data, timeout=10) as response:
                 if response.status == 201:
-                    return await response.json()
-                logger.error(
-                    f"Failed to create student: {response.status} - {await response.text()}"
-                )
-                return None
+                    logger.info(
+                        f"Student created successfully: {await response.json()}"
+                    )
+                    return True
+                else:
+                    logger.error(
+                        f"Failed to create student: {response.status} - {await response.text()}"
+                    )
+                    return False
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Error creating student: {e}")
-            return None
+            return False
+
+    async def create_user(self, user_data: dict) -> bool:
+        """
+        Save the user's information to the database.
+
+        Args:
+            user_data: A dictionary containing the user's information.
+
+        Returns:
+            True if the user was saved successfully, otherwise False.
+        """
+        try:
+            # Use the create_student method to save the user data
+            success = await self.create_student(user_data)
+            if success:
+                logger.info(f"User {user_data.get('telegram_id')} created successfully")
+                return True
+            else:
+                logger.error(f"Failed to create user {user_data.get('telegram_id')}")
+                return False
+        except Exception as e:
+            logger.error(f"Error creating user: {e}")
+            return False
 
     async def get_student_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
-        """Get student details by Telegram ID."""
-        url = f"{self.base_url}/students/?telegram_id={telegram_id}"
-        session = await self.get_session()
+        """
+        Get student details by Telegram ID.
+
+        Args:
+            telegram_id: The student's Telegram ID.
+
+        Returns:
+            A dictionary containing the student's information, or None if not found.
+        """
         try:
+            session = await self.get_session()
+            url = f"{self.base_url}/students/?telegram_id={telegram_id}"
+            logger.info(f"Fetching student with telegram_id={telegram_id} from {url}")
+
             async with session.get(url, timeout=10) as response:
                 if response.status == 200:
                     data = await response.json()
-                    return data[0] if data else None
-                logger.error(
-                    f"Failed to get student: {response.status} - {await response.text()}"
-                )
-                return None
+                    logger.info(f"Received response: {data}")
+
+                    # Handle different response formats
+                    if isinstance(data, list):
+                        # Iterate through the list to find the student with the matching telegram_id
+                        for student in data:
+                            if str(student.get("telegram_id")) == str(telegram_id):
+                                return student
+                        logger.info(f"No student found with telegram_id={telegram_id}")
+                        return None
+                    elif isinstance(data, dict):
+                        # If the response is a single object, check if it matches the telegram_id
+                        if str(data.get("telegram_id")) == str(telegram_id):
+                            return data
+                        logger.info(f"No student found with telegram_id={telegram_id}")
+                        return None
+                    else:
+                        logger.error(f"Unexpected response format: {type(data)}")
+                        return None
+                else:
+                    logger.error(
+                        f"Failed to get student: {response.status} - {await response.text()}"
+                    )
+                    return None
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Error getting student: {e}")
             return None
 
-    async def update_student(
-        self, student_id: int, update_data: Dict
-    ) -> Optional[Dict]:
-        """Update existing student information."""
-        session = await self.get_session()
+    async def update_student(self, student_id: int, update_data: Dict) -> bool:
+        """
+        Update existing student information.
+
+        Args:
+            student_id: The ID of the student to update.
+            update_data: A dictionary containing the updated student information.
+
+        Returns:
+            True if the student was updated successfully, otherwise False.
+        """
         try:
-            async with session.patch(
-                f"{self.base_url}/students/{student_id}/",
-                json=update_data,
-                headers=self._get_headers(),
-                timeout=10,
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
+            session = await self.get_session()
+            url = f"{self.base_url}/students/{student_id}/"
+            logger.info(f"Sending request to {url} with data: {update_data}")
+
+            # Remove telegram_id from update_data to avoid conflicts
+            if "telegram_id" in update_data:
+                del update_data["telegram_id"]
+
+            async with session.patch(url, json=update_data, timeout=10) as response:
+                if response.status == 200:
+                    logger.info(
+                        f"Student updated successfully: {await response.json()}"
+                    )
+                    return True
+                else:
+                    logger.error(
+                        f"Failed to update student: {response.status} - {await response.text()}"
+                    )
+                    return False
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            logger.error(f"Error updating student {student_id}: {e}")
-            return None
+            logger.error(f"Error updating student: {e}")
+            return False
 
     async def get_mentor_by_name(self, name: str) -> Optional[Dict]:
         session = await self.get_session()
@@ -294,6 +396,31 @@ class APIClient:
                 return None
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Error fetching mentor by name: {e}")
+            return None
+
+    async def get_mentor_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
+        """
+        Get mentor details by Telegram ID.
+
+        Args:
+            telegram_id: The mentor's Telegram ID.
+
+        Returns:
+            A dictionary containing the mentor's information, or None if not found.
+        """
+        try:
+            session = await self.get_session()
+            url = f"{self.base_url}/mentors/?telegram_id={telegram_id}"
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data[0] if data else None
+                logger.error(
+                    f"Failed to get mentor: {response.status} - {await response.text()}"
+                )
+                return None
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.error(f"Error getting mentor: {e}")
             return None
 
     async def get_mentor_by_id(self, mentor_id: int) -> Optional[Dict]:
@@ -503,7 +630,6 @@ class APIClient:
                 params=params,
             )
 
-
             if isinstance(result, dict):
                 # Handle paginated response
                 return result.get("results", [])
@@ -515,3 +641,25 @@ class APIClient:
         except Exception as e:
             logger.error(f"Error fetching webinars: {e}")
             return None
+
+    async def get_all_users(self) -> List[Dict]:
+        """
+        Fetch all users from the database.
+
+        Returns:
+            A list of user dictionaries, each containing user details.
+        """
+        try:
+            session = await self.get_session()
+            url = f"{self.base_url}/students/"  # Replace with the correct endpoint
+            async with session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                logger.error(
+                    f"Failed to fetch users: {response.status} - {await response.text()}"
+                )
+                return []
+        except Exception as e:
+            logger.error(f"Error fetching users: {e}")
+            return []

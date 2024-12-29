@@ -1,4 +1,4 @@
-# keyboards/webinar_keyboard.py
+# keyboards/courses_keyboard.py
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from typing import List, Dict
 from loader import i18n
@@ -7,22 +7,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def create_webinar_keyboard(webinars: List[Dict], user_id: int) -> ReplyKeyboardMarkup:
+def create_courses_keyboard(courses: List[Dict], user_id: int) -> ReplyKeyboardMarkup:
     """
-    Create a keyboard with webinar titles.
+    Create a keyboard with course titles.
 
     Args:
-        webinars: List of webinar dictionaries containing 'title' and 'id'.
+        courses: List of course dictionaries containing 'title' and 'id'.
         user_id: Telegram user ID for localization.
 
     Returns:
-        ReplyKeyboardMarkup with webinar titles as buttons.
+        ReplyKeyboardMarkup with course titles as buttons.
     """
     try:
-        # Create buttons for each webinar
-        buttons = [
-            [KeyboardButton(text=f"📅 {webinar['title']}")] for webinar in webinars
-        ]
+        # Create buttons for each course with an emoji
+        buttons = [[KeyboardButton(text=f"📚 {course['title']}")] for course in courses]
 
         # Add a back button
         buttons.append(
@@ -41,8 +39,8 @@ def create_webinar_keyboard(webinars: List[Dict], user_id: int) -> ReplyKeyboard
             one_time_keyboard=True,
         )
     except Exception as e:
-        logger.error(f"Error creating webinar keyboard: {e}")
+        logger.error(f"Error creating courses keyboard: {e}")
         return ReplyKeyboardMarkup(
-            keyboard=[[KeyboardButton(text="⚠️ Error fetching webinars")]],
+            keyboard=[[KeyboardButton(text="⚠️ Error fetching courses")]],
             resize_keyboard=True,
         )

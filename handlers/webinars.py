@@ -6,6 +6,7 @@ from data.api_client import APIClient
 from keyboards.back_button import back_to_webinars
 from keyboards.webinar_keyboard import create_webinar_keyboard
 import logging
+from loader import i18n
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +19,7 @@ router = Router()
 async def list_webinars(message: Message, state: FSMContext, api_client: APIClient):
     """Display available webinars in a keyboard"""
     try:
-        await message.answer("Fetching webinars...")
+        # await message.answer("Fetching webinars...")
 
         # Fetch webinars from the API
         webinars = await api_client.get_webinars(telegram_id=message.from_user.id)
@@ -32,7 +33,7 @@ async def list_webinars(message: Message, state: FSMContext, api_client: APIClie
 
         # Send the keyboard to the user
         await message.answer(
-            "Here are the available webinars:",
+            i18n.get_text(message.from_user.id, "choose_webinar"),
             reply_markup=keyboard,
         )
 
@@ -40,8 +41,11 @@ async def list_webinars(message: Message, state: FSMContext, api_client: APIClie
         logger.error(f"Error listing webinars: {e}")
         await message.answer("⚠️ An error occurred. Please try again later.")
 
+
 @router.message(F.text.startswith("📅"))
-async def handle_webinar_selection(message: Message, state: FSMContext, api_client: APIClient):
+async def handle_webinar_selection(
+    message: Message, state: FSMContext, api_client: APIClient
+):
     """Handle webinar selection and display details"""
     try:
         # Extract the webinar title from the button text
@@ -63,9 +67,8 @@ async def handle_webinar_selection(message: Message, state: FSMContext, api_clie
         # Display webinar details
         webinar_details = (
             f"📅 *{selected_webinar['title']}*\n"
-            f"🧑‍🏫 Mentor: {selected_webinar['mentor_details']['name']}\n"
-            f"📝 Description: {selected_webinar['mentor_details']['bio']}\n"
-            # f"🕒 Created at: {selected_webinar['created_at']}"
+            f"🧑‍🏫 {i18n.get_text(message.from_user.id, 'mentor')}: {selected_webinar['mentor_details']['name']}\n"
+            
         )
         webinar_video_id = selected_webinar.get("video_telegram_id")
         logger.info(f"Webinar details: {webinar_video_id}")
@@ -76,9 +79,9 @@ async def handle_webinar_selection(message: Message, state: FSMContext, api_clie
                 caption=webinar_details,
                 parse_mode="Markdown",
                 reply_markup=back_to_webinars(user_id=message.from_user.id),
-
+                protect_content=True,
             )
-        else:  
+        else:
             await message.answer(
                 webinar_details,
                 parse_mode="Markdown",
@@ -88,17 +91,21 @@ async def handle_webinar_selection(message: Message, state: FSMContext, api_clie
         logger.error(f"Error handling webinar selection: {e}")
         await message.answer("⚠️ An error occurred. Please try again.")
 
-@router.message(F.text == "⬅️ Back to Main Menu")
+
+@router.message(F.text.in_(["⬅️ Asosiy menyuga qaytish", "⬅️ Back to Main Menu"]))
 async def handle_back_to_menu(message: Message, state: FSMContext):
     """Handle the back button and return to the main menu"""
     from keyboards.menu import menu_keyboard
 
     await message.answer(
-        "Returning to the main menu...",
+        i18n.get_text(message.from_user.id, "returning_to_main_menu"),
         reply_markup=menu_keyboard(message.from_user.id),
     )
 
+
 @router.message(F.text.in_(["⬅️ Vebinarlarga qaytish", "⬅️ Back to Webinars"]))
-async def handle_back_to_webinars(message: Message, state: FSMContext):
+async def handle_back_to_webinars(
+    message: Message, state: FSMContext, api_client: APIClient
+):
     """Handle the back button and return to the webinar list"""
-    await list_webinars(message, state, api_client=APIClient())
+    await list_webinars(message, state, api_client)
