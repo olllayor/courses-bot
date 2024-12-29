@@ -8,7 +8,7 @@ import asyncio
 from data.api_client import APIClient
 from loader import dp, bot, i18n
 from config import API_TOKEN
-from handlers import courses, help, lessons, mentors, payment, start
+from handlers import courses, help, lessons, mentors, payment, start, webinars
 from utils.set_bot_commands import set_commands
 from middlewares.auth import AuthMiddleware
 
@@ -26,6 +26,7 @@ dp.callback_query.middleware(AuthMiddleware(api_client))
 # Include routers
 dp.include_router(start.router)
 dp.include_router(help.router)
+dp.include_router(webinars.router)
 dp.include_router(mentors.router)
 dp.include_router(courses.router)
 dp.include_router(lessons.router)

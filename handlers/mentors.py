@@ -20,7 +20,7 @@ from utils.filters import MentorNameFilter
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = Router()
+router = Router(name="mentors")
 
 
 async def setup_mentors_handler():
@@ -67,19 +67,14 @@ async def mentor_handler(
     message: Message, state: FSMContext, api_client: APIClient, **kwargs
 ):
     """Handle mentor selection and display details"""
-    # Check if the message matches the filter condition
-    filter_instance = MentorNameFilter()
-    filter_result = await filter_instance(message, api_client=api_client, **kwargs)
-
-    if filter_result:
-        await mentor_details(
-            message,
-            state,
-            api_client,
-            filter_result.get("mentor_name"),
-            state=state,
-            **kwargs,
-        )
+    mentor_name = message.text
+    await mentor_details(
+        message=message,
+        state=state,
+        api_client=api_client,
+        mentor_name=mentor_name,
+        **kwargs,
+    )
 
 
 async def mentor_details(

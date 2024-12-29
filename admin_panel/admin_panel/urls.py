@@ -8,6 +8,7 @@ from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from mentors.views import MentorAvailabilityViewSet, MentorViewSet
 from payment.views import PaymentViewSet
+from webinar.views import WebinarViewSet
 from rest_framework import permissions
 from rest_framework.routers import DefaultRouter
 
@@ -26,6 +27,7 @@ schema_view = get_schema_view(
 router = DefaultRouter()
 router.register(r"students", StudentViewSet)
 router.register(r"mentors", MentorViewSet)
+router.register(r"webinars", WebinarViewSet)
 router.register(r"mentor-availability", MentorAvailabilityViewSet)
 router.register(r"courses", CourseViewSet)
 router.register(r"lessons", LessonViewSet)

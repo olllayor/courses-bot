@@ -300,7 +300,9 @@ class APIClient:
         session = await self.get_session()
         try:
             async with session.get(
-                f"{self.base_url}/mentors/{mentor_id}/", headers=self._get_headers(), timeout=10
+                f"{self.base_url}/mentors/{mentor_id}/",
+                headers=self._get_headers(),
+                timeout=10,
             ) as response:
                 response.raise_for_status()
                 return await response.json()
@@ -321,7 +323,9 @@ class APIClient:
             ) as response:
                 response.raise_for_status()
                 courses = await response.json()
-                return [course for course in courses if course["mentor"]["id"] == mentor_id]
+                return [
+                    course for course in courses if course["mentor"]["id"] == mentor_id
+                ]
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Error fetching courses for mentor {mentor_id}: {e}")
             return None
@@ -472,3 +476,37 @@ class APIClient:
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             logger.error(f"Error updating lesson {lesson_id}: {e}")
             return None
+
+        
+
+    async def get_webinars(self, telegram_id: int, mentor_id: int = None) -> List[Dict]:
+        """
+        Get webinars with optional mentor filter.
+
+        Args:
+            telegram_id: User's telegram ID for authentication
+            mentor_id: Optional mentor ID to filter webinars
+
+        Returns:
+            List of webinar dictionaries
+        """
+        try:
+            params = {}
+            if mentor_id:
+                params["mentor"] = mentor_id
+
+            result = await self.make_authenticated_request(
+                "GET", f"{self.base_url}/webinars/", telegram_id=telegram_id, params=params
+            )
+
+            if isinstance(result, dict):
+                # Handle paginated response
+                return result.get("results", [])
+            elif isinstance(result, list):
+                # Handle non-paginated response
+                return result
+            return []
+
+        except Exception as e:
+            logger.error(f"Error fetching webinars: {e}")
+            return []

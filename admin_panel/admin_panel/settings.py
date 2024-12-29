@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "accounts",
     "progress",
     "payment",
+    "webinar",
     "rest_framework",
     "rest_framework.authtoken",
 ]
