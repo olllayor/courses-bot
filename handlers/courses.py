@@ -1,143 +1,99 @@
 # handlers/courses.py
-import logging
-
-import click
 from aiogram import F, Router
-from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from rich.logging import RichHandler
-
 from data.api_client import APIClient
-from handlers.mentors import get_mentor_id
-from keyboards.lessons_keyboard import create_lessons_keyboard
-from keyboards.mentors_keyboard import mentor_courses
-from states.mentor_state import CourseState, LessonState
-
-router = Router()
-api_client = APIClient()
+from keyboards.courses_keyboard import create_courses_keyboard
+from keyboards.back_button import back_to_courses
+from keyboards.menu import menu_keyboard
+from states.mentor_state import CourseState
+from loader import i18n
+import logging
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)
-
-
 logger = logging.getLogger(__name__)
-# Setup Rich logger with Click suppression
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True, tracebacks_suppress=[click])],
-)
+
+router = Router()
 
 
 @router.message(F.text.in_(["📚 Courses", "📚 Kurslar"]))
-async def courses(message: Message, state: FSMContext):
-    """Handler to display available courses for the selected mentor"""
-    try:
-        mentor_id = await get_mentor_id(state)
-        logger.info(f"Fetching courses for mentor_id: {mentor_id}")
+async def list_courses(message: Message, state: FSMContext, api_client: APIClient):
+    """Display available courses in a keyboard"""
+    await message.answer(i18n.get_text(message.from_user.id, "coming_soon"),
+                         reply_markup=menu_keyboard(user_id=message.from_user.id))
+#     try:
+#         await message.answer(i18n.get_text(message.from_user.id, "fetching_courses"))
 
-        if not mentor_id:
-            await message.answer("Please select a mentor first.")
-            return
+#         # Fetch courses from the API
+#         courses = await api_client.get_courses_by_mentor_id(
+#             telegram_id=message.from_user.id
+#         )
 
-        courses = await api_client.get_courses_by_mentor_id(mentor_id)
+#         if not courses:
+#             await message.answer(
+#                 i18n.get_text(message.from_user.id, "no_courses_available")
+#             )
+#             return
 
-        # logger.info(f"Available courses: {courses}")
-        if not courses:
-            await message.answer("No courses available at the moment.")
-            return
+#         # Create a keyboard with course titles
+#         keyboard = create_courses_keyboard(courses, user_id=message.from_user.id)
 
-        courses_list = "\n\n".join(
-            [
-                f"📚 *{course['title']}*\n"
-                + f"💰 Price: UZS{float(course['price']):,.2f}"
-                for course in courses
-            ]
-        )
+#         # Send the keyboard to the user
+#         await message.answer(
+#             i18n.get_text(message.from_user.id, "available_courses"),
+#             reply_markup=keyboard,
+#         )
 
-        await state.set_state(CourseState.Course_ID)
-        await message.answer(
-            f"*Available Courses:*\n\n{courses_list}",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=await mentor_courses(courses),
-        )
-
-    except Exception as e:
-        logger.error(f"Error in courses handler: {e}")
-        await message.answer("An error occurred while fetching courses.")
-    finally:
-        await api_client.close()  # Ensure session is closed
+#     except Exception as e:
+#         logger.error(f"Error listing courses: {e}")
+#         await message.answer(i18n.get_text(message.from_user.id, "error_occurred"))
 
 
-# handlers/courses.py
-@router.message(CourseState.Course_ID)
-async def handle_course_selection(message: Message, state: FSMContext):
-    try:
-        # Handle back button
-        if message.text in ["⬅️ Back to Courses", "⬅️ Kurslarga qaytish"]:
-            await state.set_state(CourseState.Course_ID)
-            return await courses(message, state)
+# # handlers/courses.py
+# @router.message(F.text.startswith("📚"))
+# async def handle_course_selection(
+#     message: Message, state: FSMContext, api_client: APIClient
+# ):
+#     """Handle course selection and display details"""
+#     try:
+#         # Extract the course title from the button text
+#         course_title = message.text.replace("📚 ", "").strip()
 
-        mentor_id = await get_mentor_id(state)
-        user_id = message.from_user.id
+#         # Fetch courses from the API
+#         courses = await api_client.get_courses_by_mentor_id(
+#             telegram_id=message.from_user.id
+#         )
 
-        courses_list = await api_client.get_courses_by_mentor_id(mentor_id)
-        if not courses_list:
-            await message.answer("No courses available.")
-            return
+#         # Find the selected course
+#         selected_course = next(
+#             (course for course in courses if course["title"] == course_title),
+#             None,
+#         )
 
-        # Clean message text for comparison
-        clean_message = message.text.replace("📚 ", "").strip()
+#         if not selected_course:
+#             await message.answer(
+#                 i18n.get_text(message.from_user.id, "course_not_found")
+#             )
+#             return
 
-        selected_course = next(
-            (
-                course
-                for course in courses_list
-                if course["title"].lower() == clean_message.lower()
-            ),
-            None,
-        )
+#         # Store course_id in state
+#         await state.update_data(course_id=selected_course["id"])
 
-        if not selected_course:
-            await message.answer("Please select a valid course.")
-            return
+#         # Display course details
+#         course_details = (
+#             f"📚 *{selected_course['title']}*\n"
+#             f"🧑‍🏫 {i18n.get_text(message.from_user.id, 'mentor')}: {selected_course['mentor']['name']}\n"
+#             f"💰 {i18n.get_text(message.from_user.id, 'price')}: UZS{float(selected_course['price']):,.2f}\n"
+#             f"📝 {i18n.get_text(message.from_user.id, 'description')}: {selected_course.get('description', i18n.get_text(message.from_user.id, 'no_description_available'))}"
+#         )
 
-        await state.update_data(course_id=selected_course["id"])
+#         await message.answer(
+#             course_details,
+#             parse_mode="Markdown",
+#             reply_markup=back_to_courses(user_id=message.from_user.id),
+#         )
 
-        # Get user's purchase status
-        has_purchased = await api_client.check_user_purchase(
-            user_id, selected_course["id"]
-        )
-        logger.info(f"User has purchased: {has_purchased}")
-
-        lessons = selected_course.get("lessons", [])
-
-        # logger.info(f"Lessons: {lessons}")
-
-        if not lessons:
-            await message.answer("No lessons available for this course.")
-            return
-
-        keyboard = await create_lessons_keyboard(lessons, user_id, has_purchased)
-
-        lessons_list = "\n\n".join(
-            [
-                f"{'🆓 ' if lesson['is_free'] else '🔒 '}*{lesson['title']}*"
-                + (f"\n{'Free Lesson' if lesson['is_free'] else 'Premium Lesson'}")
-                for lesson in lessons
-            ]
-        )
-
-        await message.answer(
-            f"*{selected_course['title']}*\n\n{lessons_list}",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=keyboard,
-        )
-
-        await state.set_state(LessonState.Lesson_ID)
-
-    except Exception as e:
-        logger.error(f"Error in course selection: {e}")
-        await message.answer("An error occurred. Please try again.")
+#     except Exception as e:
+#         logger.error(f"Error handling course selection: {e}")
+#         await message.answer(i18n.get_text(message.from_user.id, "error_occurred"))

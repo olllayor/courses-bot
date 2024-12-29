@@ -6,7 +6,7 @@ from utils.renew_file_id import update_mentor_photo_id, update_lesson_video_id
 from data.api_client import APIClient
 
 logger = logging.getLogger(__name__)
-api_client = APIClient()
+
 
 async def refresh_file_id(
     old_file_id: str, old_unique_id: str = None, file_type: str = "photo"
@@ -41,7 +41,11 @@ async def refresh_file_id(
 
 
 async def send_media_safely(
-    message: Message, media_id: str, file_type: str = "photo", **kwargs
+    message: Message,
+    media_id: str,
+    file_type: str = "photo",
+    api_client: APIClient = None,
+    **kwargs,
 ) -> bool:
     """Safely send media with automatic file_id refresh"""
     try:
@@ -62,26 +66,54 @@ async def send_media_safely(
             if new_file_id:
                 try:
                     if file_type == "photo":
-                        await message.answer_photo(photo=new_file_id, **kwargs)
+                        result = await message.answer_photo(photo=new_file_id, **kwargs)
                         # Update in database
-                        await update_media_id(file_type, new_file_id, new_unique_id)
+                        if result:
+                            await update_media_id(
+                                file_type,
+                                result.photo[-1].file_unique_id,
+                                new_file_id,
+                                new_unique_id,
+                                api_client,
+                            )
                     elif file_type == "video":
-                        await message.answer_video(video=new_file_id, **kwargs)
+                        result = await message.answer_video(video=new_file_id, **kwargs)
                         # Update in database
-                        await update_media_id(file_type, new_file_id, new_unique_id)
+                        if result:
+                            await update_media_id(
+                                file_type,
+                                result.video.file_unique_id,
+                                new_file_id,
+                                new_unique_id,
+                                api_client,
+                            )
                     return True
+
                 except Exception as e2:
                     logger.error(f"Failed to send media with refreshed ID: {e2}")
+        else:
+            logger.error(f"Failed to send media: {e}")
+
         return False
 
 
-async def update_media_id(file_type: str, entity_id: int, new_file_id: str, new_unique_id: str, api_client: APIClient) -> bool:
+async def update_media_id(
+    file_type: str,
+    entity_id: int,
+    new_file_id: str,
+    new_unique_id: str,
+    api_client: APIClient,
+) -> bool:
     """Update media IDs in database"""
     try:
-        if file_type == 'photo':
-            return await update_mentor_photo_id(entity_id, new_file_id, new_unique_id, api_client)
-        elif file_type == 'video':
-            return await update_lesson_video_id(entity_id, new_file_id, new_unique_id, api_client)
+        if file_type == "photo":
+            return await update_mentor_photo_id(
+                entity_id, new_file_id, new_unique_id, api_client
+            )
+        elif file_type == "video":
+            return await update_lesson_video_id(
+                entity_id, new_file_id, new_unique_id, api_client
+            )
         return False
     except Exception as e:
         logger.error(f"Failed to update media ID: {e}")
