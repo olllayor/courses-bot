@@ -162,3 +162,6 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 ANALYTICS_API_KEY = os.getenv("ANALYTICS_API_KEY")
+CSRF_TRUSTED_ORIGINS = [
+    'https://courses-bot-production.up.railway.app',
+]
