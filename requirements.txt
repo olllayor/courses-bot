@@ -25,7 +25,6 @@ mdurl==0.1.2
 multidict==6.1.0
 packaging==24.2
 propcache==0.2.0
-psycopg2
 psycopg2-binary
 pydantic==2.9.2
 pydantic-core==2.23.4
