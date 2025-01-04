@@ -1,9 +1,0 @@
-__pycache__/
-*.pyc
-*.pyo
-*.db
-.git
-.venv
-venv
-node_modules
-npm-debug.log
