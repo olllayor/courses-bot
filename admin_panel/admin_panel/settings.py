@@ -66,7 +66,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "admin_panel.wsgi.application"
 
 # Database configuration
-ALLOWED_HOSTS = ['3.123.154.198', 'ec2-3-123-154-198.eu-central-1.compute.amazonaws.com']
+ALLOWED_HOSTS = ['3.123.154.198', 'ec2-3-123-154-198.eu-central-1.compute.amazonaws.com', 'web']
 
 # Database
 DATABASES = {
