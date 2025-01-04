@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-import dj_database_url
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -121,20 +121,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 ANALYTICS_API_KEY = os.getenv("ANALYTICS_API_KEY")
 
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
-        'file': {
-            'level': 'ERROR',
-            'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'error.log'),  # Logs inside your project directory
+        'console': {
+            'level': 'ERROR',  # Log only errors
+            'class': 'logging.StreamHandler',
         },
     },
     'loggers': {
         'django': {
-            'handlers': ['file'],
+            'handlers': ['console'],
             'level': 'ERROR',
             'propagate': True,
         },
