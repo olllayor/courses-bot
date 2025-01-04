@@ -13,7 +13,7 @@ services:
       - API_TOKEN=${API_TOKEN}
       - ADMIN_IDS=${ADMIN_IDS}
     command: >
-      sh -c "python manage.py collectstatic --noinput &&
+      sh -c "python admin_panel/manage.py collectstatic --noinput &&
              python admin_panel/manage.py runserver 0.0.0.0:8000 &
              python app.py"
     depends_on:

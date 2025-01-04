@@ -22,8 +22,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the current directory contents into the container at /app
 COPY . /app/
 
-# Create the logs directory
-RUN mkdir -p /app/admin_panel/logs
 
 # Collect static files during the build process
 RUN python admin_panel/manage.py collectstatic --noinput
