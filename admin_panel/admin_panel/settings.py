@@ -68,11 +68,15 @@ WSGI_APPLICATION = "admin_panel.wsgi.application"
 
 # Database configuration
 DATABASES = {
-    "default": dj_database_url.config(
-        default=os.getenv("DATABASE_URL"), conn_max_age=1000
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'porla_course_bot',
+        'USER': 'olllayor',
+        'PASSWORD': 'postgres',  # Use the actual password you set
+        'HOST': 'localhost',
+        'PORT': '5432',
+    }
 }
-
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
