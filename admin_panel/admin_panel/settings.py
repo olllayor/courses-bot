@@ -13,9 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-7rtu5tq(*)fqaw26moerjhhjb2l-jknhof&!2z87oj758l(0tk"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ["*"]
 
 # Application definition
 INSTALLED_APPS = [
@@ -67,14 +66,17 @@ TEMPLATES = [
 WSGI_APPLICATION = "admin_panel.wsgi.application"
 
 # Database configuration
+ALLOWED_HOSTS = ['3.123.154.198', 'ec2-3-123-154-198.eu-central-1.compute.amazonaws.com']
+
+# Database
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'porla_course_bot',
-        'USER': 'olllayor',
-        'PASSWORD': 'postgres',  # Use the actual password you set
-        'HOST': 'db',
-        'PORT': '5432',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME', 'porla_course_bot'),
+        'USER': os.getenv('DB_USER', 'olllayor'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
 REST_FRAMEWORK = {
@@ -118,6 +120,24 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 ANALYTICS_API_KEY = os.getenv("ANALYTICS_API_KEY")
-CSRF_TRUSTED_ORIGINS = [
-    "https://courses-bot-production.up.railway.app",
-]
+
+
+# Logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'ERROR',
+            'class': 'logging.FileHandler',
+            'filename': '/var/log/django/error.log',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['file'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+    },
+}

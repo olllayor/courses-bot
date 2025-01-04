@@ -19,7 +19,7 @@ services:
     image: postgres:13
     container_name: postgres_db
     environment:
-      POSTGRES_USER: olllayor
+      POSTGRES_USER: ollayor
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: porla_course_bot
     volumes:
