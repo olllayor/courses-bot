@@ -73,7 +73,7 @@ DATABASES = {
         'NAME': 'porla_course_bot',
         'USER': 'olllayor',
         'PASSWORD': 'postgres',  # Use the actual password you set
-        'HOST': 'localhost',
+        'HOST': 'db',
         'PORT': '5432',
     }
 }
