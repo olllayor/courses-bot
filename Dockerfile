@@ -25,6 +25,9 @@ COPY . /app/
 # Create the logs directory
 RUN mkdir -p /app/admin_panel/logs
 
+# Collect static files during the build process
+RUN python admin_panel/manage.py collectstatic --noinput
+
 # Expose the port the app runs on
 EXPOSE 8000
 
