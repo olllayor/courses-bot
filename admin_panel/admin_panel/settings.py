@@ -75,7 +75,7 @@ DATABASES = {
         'NAME': os.getenv('DB_NAME', 'porla_course_bot'),
         'USER': os.getenv('DB_USER', 'olllayor'),
         'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'HOST': os.getenv('DB_HOST', 'db'),
         'PORT': os.getenv('DB_PORT', '5432'),
     }
 }
