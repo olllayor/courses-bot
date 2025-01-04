@@ -2,9 +2,6 @@
 
 __pycache__/
 
-<<<<<<< HEAD
-.DB_Store
-=======
 # Created by https://www.gitignore.io
 
 ### OSX ###
@@ -94,4 +91,3 @@ local_settings.py
 
 .env
 db.sqlite3
->>>>>>> with_aistudio
