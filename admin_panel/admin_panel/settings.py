@@ -67,17 +67,17 @@ TEMPLATES = [
 WSGI_APPLICATION = "admin_panel.wsgi.application"
 
 # Database configuration
-ALLOWED_HOSTS = ['3.123.154.198', 'ec2-3-123-154-198.eu-central-1.compute.amazonaws.com', 'web']
+ALLOWED_HOSTS = ['3.123.154.198', 'ec2-3-123-154-198.eu-central-1.compute.amazonaws.com', 'web', '165.22.64.224']
 
 # Database
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'porla_course_bot'),
-        'USER': os.getenv('DB_USER', 'olllayor'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
-        'HOST': os.getenv('DB_HOST', 'db'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': os.getenv('DB_NAME', 'postgres'),
+        'USER': os.getenv('DB_USER', 'postgres.svjltswqcndkzrpokcxy '),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'porlacoursebot'),
+        'HOST': os.getenv('DB_HOST', 'aws-0-eu-central-1.pooler.supabase.com'),
+        'PORT': os.getenv('DB_PORT', '6543'),
     }
 }
 REST_FRAMEWORK = {
