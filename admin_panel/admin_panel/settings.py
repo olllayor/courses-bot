@@ -80,6 +80,7 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT', '6543'),
     }
 }
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
