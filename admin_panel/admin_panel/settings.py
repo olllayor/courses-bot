@@ -67,7 +67,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "admin_panel.wsgi.application"
 
 # Database configuration
-ALLOWED_HOSTS = ['ec2-3-123-154-198.eu-central-1.compute.amazonaws.com', 'web']
+ALLOWED_HOSTS = ['3.123.154.198', 'ec2-3-123-154-198.eu-central-1.compute.amazonaws.com', 'web', '165.22.64.224']
 
 # Database
 DATABASES = {
@@ -80,6 +80,7 @@ DATABASES = {
         'PORT': os.getenv('DB_PORT', '6543'),
     }
 }
+
 
 
 
