@@ -26,6 +26,9 @@ COPY . /app/
 # Collect static files during the build process
 RUN python admin_panel/manage.py collectstatic --noinput
 
+# Apply database migrations (THIS IS THE KEY ADDITION)
+RUN python admin_panel/manage.py migrate --noinput
+
 # Expose the port the app runs on
 EXPOSE 8000
 
