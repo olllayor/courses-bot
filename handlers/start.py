@@ -1,26 +1,21 @@
 # handlers/start.py
 
-from aiogram import Router, F
-from aiogram.types import Message
-from aiogram.enums import ParseMode
-from aiogram.filters import Command, CommandStart
-from aiogram import Bot, Dispatcher, types, Router
-from aiogram.fsm.context import FSMContext
-from data.api_client import APIClient
-from keyboards.menu import menu_keyboard
-from loader import dp, bot, i18n
-from aiogram.types import (
-    Message,
-    CallbackQuery,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-)
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.fsm.state import State, StatesGroup
-from states.settings import BotSettings
-from states.mentor_state import MentorState, CourseState
 import logging
 
+from aiogram import Bot, Dispatcher, F, Router, types
+from aiogram.enums import ParseMode
+from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import (CallbackQuery, InlineKeyboardButton,
+                           InlineKeyboardMarkup, Message)
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from data.api_client import APIClient
+from keyboards.menu import menu_keyboard
+from loader import bot, dp, i18n
+from states.mentor_state import CourseState, MentorState
+from states.settings import BotSettings
 
 router = Router()
 api_client = APIClient()
@@ -47,15 +42,15 @@ async def command_start(message: Message, state: FSMContext) -> None:
         await state.clear()
         user_id = message.from_user.id
 
-        # Initialize API client and authenticate
-        authenticated = await api_client.authenticate_user(
+        # Initialize API client and register user
+        user_registered = await api_client.register_user(
             telegram_id=user_id, name=message.from_user.full_name
         )
 
-        logger.info(f"User {user_id} authenticated: {authenticated}")
+        logger.info(f"User {user_id} registered: {user_registered}")
 
-        if not authenticated:
-            await message.answer("⚠️ Authentication failed. Please try again later.")
+        if not user_registered:
+            await message.answer("⚠️ Registration failed. Please try again later.")
             return
 
         # Get student profile
@@ -63,10 +58,9 @@ async def command_start(message: Message, state: FSMContext) -> None:
         logger.info(f"Student profile: {student}")
 
         if student:
-            # Store auth data in state
-            token = api_client._get_cached_token(user_id)
+            # Store user data in state
             await state.update_data(
-                user_id=user_id, student_id=student["id"], auth_token=token
+                user_id=user_id, student_id=student["id"]
             )
 
             # Show language selection

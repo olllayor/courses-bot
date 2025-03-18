@@ -1,8 +1,9 @@
 # middlewares/auth.py
-from typing import Any, Callable, Dict, Awaitable
-from aiogram import BaseMiddleware
-from aiogram.types import Message, CallbackQuery
 import logging
+from typing import Any, Awaitable, Callable, Dict
+
+from aiogram import BaseMiddleware
+from aiogram.types import CallbackQuery, Message
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +26,22 @@ class AuthMiddleware(BaseMiddleware):
 
         try:
             user_id = event.from_user.id
-            authenticated = await self.api_client.ensure_authenticated(
-                telegram_id=user_id, name=event.from_user.full_name
+            user_name = event.from_user.full_name
+            
+            # Make sure user exists in the system
+            user_exists = await self.api_client.ensure_user_exists(
+                telegram_id=user_id, name=user_name
             )
 
-            if not authenticated:
+            if not user_exists:
+                logger.warning(f"User {user_id} ({user_name}) doesn't exist and couldn't be created")
                 if isinstance(event, Message):
                     await event.answer(
-                        "⚠️ Authentication failed. Please try /start again."
+                        "⚠️ Registration failed. Please try /start again."
                     )
                 else:
                     await event.message.answer(
-                        "⚠️ Authentication failed. Please try /start again."
+                        "⚠️ Registration failed. Please try /start again."
                     )
                 return
 
@@ -46,8 +51,8 @@ class AuthMiddleware(BaseMiddleware):
         except Exception as e:
             logger.error(f"Auth middleware error: {e}")
             if isinstance(event, Message):
-                await event.answer("Authentication error. Please try /start again.")
+                await event.answer("An error occurred. Please try /start again.")
             else:
                 await event.message.answer(
-                    "Authentication error. Please try /start again."
+                    "An error occurred. Please try /start again."
                 )

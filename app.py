@@ -52,6 +52,8 @@ async def main():
     finally:
         await api_client.close()
         logger.info("Bot shutdown complete.")
+        
+
 
 
 if __name__ == "__main__":

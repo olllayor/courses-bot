@@ -1,10 +1,11 @@
 import asyncio
-import aiohttp
-import os
 import logging
-from typing import Any, List, Dict, Optional
-from dotenv import load_dotenv
+import os
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import aiohttp
+from dotenv import load_dotenv
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -14,8 +15,7 @@ class APIClient:
     def __init__(self):
         self.base_url = os.getenv("TEST_API_URL")
         self._session: Optional[aiohttp.ClientSession] = None
-        self._auth_cache = {}
-        self._token_refresh_lock = asyncio.Lock()
+        self._known_users = set()  # Just store telegram_ids of known users
 
     async def get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
@@ -23,166 +23,111 @@ class APIClient:
             self._session = aiohttp.ClientSession()
         return self._session
 
-    def _get_headers(self, telegram_id: int = None) -> dict:
-        """Get headers with auth token if available"""
-        headers = {"Content-Type": "application/json"}
-        if telegram_id and (token := self._get_cached_token(telegram_id)):
-            headers["Authorization"] = f"Token {token}"
-        return headers
+    def _get_headers(self) -> dict:
+        """Get standard headers"""
+        return {"Content-Type": "application/json"}
 
-    def _get_cached_token(self, telegram_id: int) -> Optional[str]:
-        if telegram_id in self._auth_cache:
-            token_data = self._auth_cache[telegram_id]
-            if datetime.now() < token_data["expires_at"]:
-                return token_data["token"]
-        return None
+    def _register_user(self, telegram_id: int):
+        """Register a user as known"""
+        self._known_users.add(telegram_id)
 
-    def _store_token(self, telegram_id: int, token: str):
-        """Store token with expiration"""
-        self._auth_cache[telegram_id] = {
-            "token": token,
-            "expires_at": datetime.now() + timedelta(hours=23),
-        }
-
-    def set_student_token(self, token: str, telegram_id: int):
-        """Set the student token and telegram_id for authenticated requests"""
-        self._student_token = token
-        self._telegram_id = telegram_id
+    def _is_registered(self, telegram_id: int) -> bool:
+        """Check if a user is registered"""
+        return telegram_id in self._known_users
 
     async def close(self):
+        """Close the session"""
         if self._session and not self._session.closed:
             await self._session.close()
 
-    async def refresh_token(self, telegram_id: int) -> bool:
-        """Refresh authentication token"""
+    async def ensure_user_exists(self, telegram_id: int, name: str = None) -> bool:
+        """Ensure user exists in the system, create if needed"""
         if not telegram_id:
+            logger.error("Missing telegram_id for user registration")
             return False
-
-        async with self._token_refresh_lock:
+        
+        # Convert to int if string was passed
+        if isinstance(telegram_id, str):
             try:
-                session = await self.get_session()
-                url = f"{self.base_url}/students/refresh_token/"
-                payload = {"telegram_id": str(telegram_id)}
-
-                async with session.post(url, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if token := data.get("token"):
-                            self._store_token(telegram_id, token)
-                            return True
-                    return False
-            except Exception as e:
-                logger.error(f"Token refresh error: {e}")
+                telegram_id = int(telegram_id)
+            except ValueError:
+                logger.error(f"Invalid telegram_id format: {telegram_id}")
                 return False
 
-    async def ensure_authenticated(self, telegram_id: int, name: str = None) -> bool:
-        """Ensure user is authenticated, refresh token if needed"""
-        if not telegram_id:
-            logger.error("Missing telegram_id for authentication")
-            return False
-
-        # Check cached token first
-        if self._get_cached_token(telegram_id):
+        # If we already know this user, return True
+        if self._is_registered(telegram_id):
             return True
 
-        if not name:
-            logger.error("Name is required for initial authentication")
-            return False
-
         try:
+            logger.info(f"Checking if user {telegram_id} exists")
             session = await self.get_session()
-            url = f"{self.base_url}/students/authenticate/"
-            payload = {
-                "telegram_id": str(telegram_id),
-                "name": name
-            }
-
-            async with session.post(url, json=payload) as response:
+            
+            # First check if user exists
+            async with session.get(f"{self.base_url}/students/?telegram_id={telegram_id}") as response:
                 if response.status == 200:
                     data = await response.json()
-                    if token := data.get("token"):
-                        self._store_token(telegram_id, token)
+                    if data and len(data) > 0:
+                        # User exists
+                        self._register_user(telegram_id)
+                        logger.info(f"User {telegram_id} already exists in the system")
                         return True
-                logger.error(f"Authentication failed: {await response.text()}")
+            
+            # User doesn't exist, create if name is provided
+            if name:
+                logger.info(f"Creating new user {telegram_id} with name {name}")
+                payload = {
+                    "telegram_id": str(telegram_id),
+                    "name": name
+                }
+                
+                async with session.post(f"{self.base_url}/students/", json=payload) as response:
+                    if response.status in (200, 201):
+                        self._register_user(telegram_id)
+                        logger.info(f"Successfully created user {telegram_id}")
+                        return True
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Failed to create user {telegram_id}: {response.status} - {error_text}")
+                        return False
+            else:
+                logger.error(f"User {telegram_id} doesn't exist and no name provided to create one")
                 return False
+                
         except Exception as e:
-            logger.error(f"Authentication error: {e}")
+            logger.error(f"Error ensuring user exists: {e}")
             return False
-    async def make_authenticated_request(
-        self, method: str, url: str, telegram_id: int, **kwargs
-    ):
-        """Make authenticated request with session management"""
-        if not telegram_id:
-            return None
 
+    async def make_request(self, method: str, url: str, telegram_id: int = None, **kwargs):
+        """Make a request with telegram_id as a query parameter"""
         session = await self.get_session()
-        headers = self._get_headers(telegram_id)
-        kwargs["headers"] = headers
-
+        
+        # Add Content-Type header if not provided
+        headers = kwargs.get('headers', {})
+        headers.setdefault('Content-Type', 'application/json')
+        kwargs['headers'] = headers
+        
+        # Add telegram_id as a query parameter for endpoints that need it
+        if telegram_id is not None:
+            params = kwargs.get('params', {})
+            params['telegram_id'] = str(telegram_id)
+            kwargs['params'] = params
+        
+        logger.info(f"Making request: {method} {url}")
+        
         try:
             async with session.request(method, url, **kwargs) as response:
-                if response.status == 401:
-                    # Try to refresh authentication
-                    if await self.ensure_authenticated(telegram_id):
-                        headers = self._get_headers(telegram_id)
-                        kwargs["headers"] = headers
-                        async with session.request(
-                            method, url, **kwargs
-                        ) as retry_response:
-                            return (
-                                await retry_response.json()
-                                if retry_response.status == 200
-                                else None
-                            )
-                return await response.json() if response.status == 200 else None
+                status_code = response.status
+                logger.info(f"Response status: {status_code} for {method} {url}")
+                
+                if status_code in (200, 201):
+                    return await response.json()
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Request failed with status {status_code}: {error_text}")
+                    return None
         except Exception as e:
-            logger.error(f"Request failed: {e}")
+            logger.error(f"Request failed for {method} {url}: {e}")
             return None
-
-    async def authenticate_user(self, telegram_id: int, name: str = None) -> bool:
-        if not telegram_id:
-            return False
-
-        try:
-            session = await self.get_session()
-            url = f"{self.base_url}/students/authenticate/"
-
-            # Check cached token first
-            if self._get_cached_token(telegram_id):
-                return True
-
-            payload = {"telegram_id": str(telegram_id)}
-            if name:
-                payload["name"] = name
-
-            async with session.post(url, json=payload) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if token := data.get("token"):
-                        self._store_token(telegram_id, token)
-                        return True
-                logger.error(f"Authentication failed: {await response.text()}")
-                return False
-        except Exception as e:
-            logger.error(f"Authentication error: {e}")
-            return False
-
-    async def get_mentors(self, telegram_id: int) -> list:
-        """Get mentors with proper session management"""
-        if not telegram_id:
-            logger.error("telegram_id is required for get_mentors")
-            return []
-
-        try:
-            return (
-                await self.make_authenticated_request(
-                    "GET", f"{self.base_url}/mentors/", telegram_id=telegram_id
-                )
-                or []
-            )
-        except Exception as e:
-            logger.error(f"Error fetching mentors: {e}")
-            return []
 
     # Add context manager support
     async def __aenter__(self):
@@ -192,120 +137,63 @@ class APIClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def create_student(self, student_data: dict) -> Optional[Dict]:
-        url = f"{self.base_url}/students/"
-        session = await self.get_session()
+    async def get_mentors(self, telegram_id: int = None) -> list:
+        """Get mentors list"""
         try:
-            async with session.post(url, json=student_data) as response:
-                if response.status == 201:
-                    return await response.json()
-                logger.error(f"Failed to create student: {response.status}")
-                return None
+            return await self.make_request("GET", f"{self.base_url}/mentors/") or []
         except Exception as e:
-            logger.error(f"Error creating student: {e}")
-            return None
-
-    async def get_student_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
-        """Get student details by Telegram ID."""
-        url = f"{self.base_url}/students/?telegram_id={telegram_id}"
-        session = await self.get_session()
-        try:
-            async with session.get(url) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data[0] if data else None
-                return None
-        except Exception as e:
-            logger.error(f"Error getting student: {e}")
-            return None
-
-    async def update_student(
-        self, student_id: int, update_data: Dict
-    ) -> Optional[Dict]:
-        """Update existing student information."""
-        session = await self.get_session()
-        try:
-            async with session.patch(
-                f"{self.base_url}/students/{student_id}/",
-                json=update_data,
-                headers=self._get_headers(),
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
-        except Exception as e:
-            logger.error(f"Error updating student {student_id}: {e}")
-            return None
+            logger.error(f"Error fetching mentors: {e}")
+            return []
 
     async def get_mentor_by_name(self, name: str) -> Optional[Dict]:
-        session = await self.get_session()
+        """Get mentor by name"""
         try:
-            async with session.get(f"{self.base_url}/mentors/") as response:
-                if response.status == 200:
-                    mentors = await response.json()
-                    return next(
-                        (m for m in mentors if m["name"].lower() == name.lower()), None
-                    )
-                return None
+            mentors = await self.make_request("GET", f"{self.base_url}/mentors/")
+            if mentors:
+                return next((m for m in mentors if m["name"].lower() == name.lower()), None)
+            return None
         except Exception as e:
             logger.error(f"Error fetching mentor by name: {e}")
             return None
 
     async def get_mentor_by_id(self, mentor_id: int) -> Optional[Dict]:
         """Get a mentor by ID."""
-        session = await self.get_session()
         try:
-            async with session.get(
-                f"{self.base_url}/mentors/{mentor_id}/", headers=self._get_headers()
-            ) as response:
-                response.raise_for_status()
-                return await response.json()
+            return await self.make_request("GET", f"{self.base_url}/mentors/{mentor_id}/")
         except Exception as e:
             logger.error(f"Error fetching mentor {mentor_id}: {e}")
             return None
 
     async def get_mentor_id_by_name(self, name: str) -> Optional[int]:
+        """Get mentor ID by name"""
         mentor = await self.get_mentor_by_name(name)
         return mentor.get("id") if mentor else None
 
     async def get_courses_by_mentor_id(self, mentor_id: int) -> Optional[List[Dict]]:
         """Get courses by a specific mentor ID."""
-        session = await self.get_session()
         try:
-            async with session.get(
-                f"{self.base_url}/courses/", headers=self._get_headers()
-            ) as response:
-                response.raise_for_status()
-                courses = await response.json()
+            courses = await self.make_request("GET", f"{self.base_url}/courses/")
+            if courses:
                 return [course for course in courses if course["mentor"] == mentor_id]
+            return []
         except Exception as e:
             logger.error(f"Error fetching courses for mentor {mentor_id}: {e}")
-            return None
+            return []
 
-    async def get_course_by_id(
-        self, course_id: int, telegram_id: int
-    ) -> Optional[Dict]:
-        """
-        Get course details by ID.
-
-        Args:
-            course_id: ID of the course to fetch
-            telegram_id: Telegram ID of the user making the request
-        """
-        if not telegram_id:
-            logger.error("telegram_id is required for get_course_by_id")
-            return None
-
+    async def get_course_by_id(self, course_id: int, telegram_id: int = None) -> Optional[Dict]:
+        """Get course details by ID."""
         try:
-            return await self.make_authenticated_request(
-                "GET", f"{self.base_url}/courses/{course_id}/", telegram_id=telegram_id
+            # Just make a simple request, telegram_id is passed for potential filtering
+            return await self.make_request(
+                "GET", 
+                f"{self.base_url}/courses/{course_id}/",
+                telegram_id=telegram_id
             )
         except Exception as e:
             logger.error(f"Error fetching course {course_id}: {e}")
             return None
 
-    async def get_lessons_by_course_id(
-        self, course_id: int, telegram_id: int
-    ) -> List[Dict]:
+    async def get_lessons_by_course_id(self, course_id: int, telegram_id: int = None) -> List[Dict]:
         """Fetch lessons by course ID."""
         try:
             course = await self.get_course_by_id(course_id, telegram_id)
@@ -316,46 +204,352 @@ class APIClient:
 
     async def check_user_purchase(self, telegram_id: int, course_id: int, name: str = None) -> bool:
         """Check if user has purchased a course"""
-        if not await self.ensure_authenticated(telegram_id, name):
-            logger.error("Failed to authenticate user for purchase check")
+        if not telegram_id:
+            logger.error("No telegram_id provided for purchase check")
             return False
-
+        
+        if not course_id:
+            logger.error("No course_id provided for purchase check")
+            return False
+        
+        # Ensure user exists
+        if name and not await self.ensure_user_exists(telegram_id, name):
+            logger.warning(f"User {telegram_id} doesn't exist, creating")
+            if not await self.ensure_user_exists(telegram_id, name):
+                logger.error(f"Failed to create user {telegram_id}")
+                return False
+        
         try:
-            result = await self.make_authenticated_request(
+            # Direct check for confirmed payments
+            logger.info(f"Checking if user {telegram_id} has purchased course {course_id}")
+            result = await self.make_request(
                 "GET",
                 f"{self.base_url}/payments/",
-                telegram_id=telegram_id,
                 params={
                     "telegram_id": telegram_id,
                     "course": course_id,
                     "status": "confirmed"
                 }
             )
-            return bool(result and result.get("results"))
+            
+            # Check if any confirmed payments exist
+            has_purchased = False
+            if result:
+                if isinstance(result, list):
+                    has_purchased = len(result) > 0
+                elif isinstance(result, dict) and "results" in result:
+                    has_purchased = len(result.get("results", [])) > 0
+            
+            logger.info(f"Purchase check result for user {telegram_id}, course {course_id}: {has_purchased}")
+            return has_purchased
+            
         except Exception as e:
-            logger.error(f"Error checking user purchase: {e}")
+            logger.error(f"Error checking purchase: {e}")
             return False
 
-    async def create_payment(
-        self, student_id: int, course_id: int, amount: float, telegram_id: int
-    ) -> Optional[Dict[str, Any]]:
-        """Create payment with authentication"""
-        # Ensure authentication before creating payment
-        if not await self.ensure_authenticated(telegram_id,):
-            logger.error("Failed to authenticate user for payment creation")
-            return None
-
+    async def create_payment(self, student_id: int, course_id: int, amount: float, telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Create payment record for a course"""
         try:
-            return await self.make_authenticated_request(
+            # Ensure user exists
+            user_name = None
+            # Try to get user info first
+            user_info = await self.make_request(
+                "GET", 
+                f"{self.base_url}/students/",
+                params={"telegram_id": telegram_id}
+            )
+            if user_info and isinstance(user_info, list) and len(user_info) > 0:
+                user_name = user_info[0].get("name")
+                
+            if not await self.ensure_user_exists(telegram_id, user_name):
+                logger.error(f"User {telegram_id} doesn't exist and couldn't be created")
+                return None
+            
+            # Check for existing pending payments first
+            existing_payments = await self.make_request(
+                "GET",
+                f"{self.base_url}/payments/",
+                params={
+                    "telegram_id": telegram_id,
+                    "course": course_id,
+                    "status": "pending"
+                }
+            )
+            
+            # If there's a pending payment, return it instead of creating a new one
+            if existing_payments and isinstance(existing_payments, list) and len(existing_payments) > 0:
+                logger.info(f"Found existing pending payment for user {telegram_id}, course {course_id}")
+                return existing_payments[0]
+            
+            # Create payment
+            payment_data = {
+                "student": student_id,
+                "course": course_id,
+                "amount": str(amount)
+            }
+            
+            # Pass telegram_id as a parameter for server-side validation
+            return await self.make_request(
                 "POST",
                 f"{self.base_url}/payments/",
                 telegram_id=telegram_id,
-                json={
-                    "student": student_id,
-                    "course": course_id,
-                    "amount": str(amount),
-                },
+                json=payment_data
             )
         except Exception as e:
             logger.error(f"Error creating payment: {e}")
             return None
+
+    async def get_payment_details(self, payment_id: int, telegram_id: int) -> Optional[Dict[str, Any]]:
+        """Get payment details by ID"""
+        try:
+            # Check if this is likely an admin based on ADMIN_IDS
+            is_admin = str(telegram_id) in os.getenv("ADMIN_ID", "").split(",")
+            logger.info(f"User {telegram_id} requesting payment {payment_id} details (admin: {is_admin})")
+            
+            # First attempt: Direct access with telegram_id
+            result = await self.make_request(
+                "GET",
+                f"{self.base_url}/payments/{payment_id}/",
+                telegram_id=telegram_id,
+                params={"is_admin": "true"} if is_admin else {}
+            )
+            
+            if result:
+                logger.info(f"Successfully retrieved payment {payment_id} details (direct access)")
+                return result
+            
+            # If direct access fails and this is an admin, try the general payments endpoint
+            if is_admin:
+                logger.info(f"Direct access failed, trying to get payment {payment_id} through list endpoint")
+                payments_list = await self.make_request(
+                    "GET",
+                    f"{self.base_url}/payments/",
+                    telegram_id=telegram_id,
+                    params={"is_admin": "true"}
+                )
+                
+                if payments_list and isinstance(payments_list, list):
+                    # Find the payment in the list
+                    for payment in payments_list:
+                        if payment.get("id") == int(payment_id):
+                            logger.info(f"Found payment {payment_id} in payments list")
+                            return payment
+            
+            logger.error(f"Failed to retrieve payment {payment_id} details")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting payment details: {e}")
+            return None
+
+    async def confirm_payment(self, payment_id: int, telegram_id: int, name: str = None) -> bool:
+        """Confirm a payment by ID by updating its status"""
+        if not payment_id:
+            logger.error("No payment_id provided for confirmation")
+            return False
+        
+        try:
+            # Ensure admin is registered
+            if name and not await self.ensure_user_exists(telegram_id, name):
+                logger.warning(f"Admin {telegram_id} not found, creating user record")
+                if not await self.ensure_user_exists(telegram_id, name):
+                    logger.error(f"Failed to create admin user {telegram_id}")
+                    return False
+            
+            # Get all payments to find the one we need
+            payments = await self.make_request(
+                "GET",
+                f"{self.base_url}/payments/",
+                telegram_id=telegram_id,
+                params={"is_admin": "true"}
+            )
+            
+            target_payment = None
+            if payments and isinstance(payments, list):
+                for payment in payments:
+                    if payment.get("id") == int(payment_id):
+                        target_payment = payment
+                        break
+            
+            if not target_payment:
+                logger.error(f"Could not find payment {payment_id} in payments list")
+                return False
+            
+            # Check if this payment is for a test user
+            student_id = target_payment.get("student")
+            if student_id and int(student_id) < 10000:
+                logger.warning(f"Confirming payment {payment_id} for test user {student_id}")
+            
+            # Update the payment status to confirmed
+            target_payment["status"] = "confirmed"
+            
+            # Send the update to the API
+            result = await self.make_request(
+                "PUT",
+                f"{self.base_url}/payments/{payment_id}/",
+                telegram_id=telegram_id,
+                params={"is_admin": "true"},
+                json=target_payment
+            )
+            
+            if result:
+                logger.info(f"Payment {payment_id} confirmed successfully")
+                return True
+            else:
+                logger.error(f"Failed to confirm payment {payment_id}")
+                return False
+        except Exception as e:
+            logger.error(f"Error confirming payment {payment_id}: {e}")
+            return False
+
+    async def cancel_payment(self, payment_id: int, telegram_id: int, name: str = None) -> bool:
+        """Cancel a payment by ID"""
+        if not payment_id:
+            logger.error("No payment_id provided for cancellation")
+            return False
+        
+        try:
+            # Ensure user exists (important for admins)
+            if name and not await self.ensure_user_exists(telegram_id, name):
+                logger.warning(f"Admin {telegram_id} not found, creating user record")
+                if not await self.ensure_user_exists(telegram_id, name):
+                    logger.error(f"Failed to create admin user {telegram_id}")
+                    return False
+            
+            # Try the all-payments endpoint with an action parameter
+            logger.info(f"Attempting to cancel payment {payment_id} with admin ID: {telegram_id}")
+            
+            # First approach: Try the general payment update endpoint
+            result = await self.make_request(
+                "POST",
+                f"{self.base_url}/payments/admin-action/",
+                telegram_id=telegram_id,
+                params={"is_admin": "true"},
+                json={
+                    "payment_id": payment_id,
+                    "admin_id": str(telegram_id),
+                    "action": "cancel"
+                }
+            )
+            
+            if result:
+                logger.info(f"Payment {payment_id} cancelled successfully")
+                return True
+            
+            # Second approach: Try a PUT request to update the payment status
+            logger.info(f"First approach failed. Trying to update payment via PUT")
+            result = await self.make_request(
+                "PUT",
+                f"{self.base_url}/payments/admin-update/",
+                telegram_id=telegram_id,
+                params={"is_admin": "true"},
+                json={
+                    "payment_id": payment_id,
+                    "admin_id": str(telegram_id),
+                    "status": "cancelled"
+                }
+            )
+            
+            if result:
+                logger.info(f"Payment {payment_id} cancelled successfully with PUT")
+                return True
+            
+            logger.error(f"Failed to cancel payment {payment_id}")
+            return False
+        except Exception as e:
+            logger.error(f"Error cancelling payment {payment_id}: {e}")
+            return False
+
+    async def get_student_by_telegram_id(self, telegram_id: str) -> Optional[Dict]:
+        """Get student details by Telegram ID"""
+        try:
+            logger.info(f"Getting student data for telegram_id {telegram_id}")
+            result = await self.make_request(
+                "GET", 
+                f"{self.base_url}/students/", 
+                params={"telegram_id": telegram_id}
+            )
+            
+            if result and isinstance(result, list) and len(result) > 0:
+                student = result[0]
+                logger.info(f"Found student: {student['name']} ({student['telegram_id']})")
+                self._register_user(int(telegram_id))
+                return student
+            else:
+                logger.warning(f"No student found with telegram_id {telegram_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting student by telegram_id {telegram_id}: {e}")
+            return None
+
+    async def register_user(self, telegram_id: int, name: str = None) -> bool:
+        """Register a user in the system"""
+        if not telegram_id:
+            logger.error("Missing telegram_id for user registration")
+            return False
+        
+        try:
+            # This is essentially the same as ensure_user_exists but with a different name
+            # for clarity in the code
+            result = await self.ensure_user_exists(telegram_id=telegram_id, name=name)
+            return result
+        except Exception as e:
+            logger.error(f"Error registering user {telegram_id}: {e}")
+            return False
+
+    async def ensure_session_closed(self):
+        """Ensure the session is closed properly"""
+        if self._session and not self._session.closed:
+            try:
+                await self._session.close()
+                logger.info("API client session closed")
+            except Exception as e:
+                logger.error(f"Error closing API client session: {e}")
+
+    async def get_pending_payment(self, telegram_id: int, course_id: int) -> Optional[Dict[str, Any]]:
+        """Check if there's an existing pending payment for a user and course"""
+        try:
+            logger.info(f"Checking for pending payments for user {telegram_id}, course {course_id}")
+            result = await self.make_request(
+                "GET",
+                f"{self.base_url}/payments/",
+                params={
+                    "telegram_id": telegram_id,
+                    "course": course_id,
+                    "status": "pending"
+                }
+            )
+            
+            if result and isinstance(result, list) and len(result) > 0:
+                logger.info(f"Found pending payment {result[0]['id']} for user {telegram_id}, course {course_id}")
+                return result[0]
+            
+            logger.info(f"No pending payments found for user {telegram_id}, course {course_id}")
+            return None
+        except Exception as e:
+            logger.error(f"Error checking pending payments: {e}")
+            return None
+
+    async def is_valid_telegram_user(self, telegram_id: int) -> bool:
+        """
+        Check if a telegram_id represents a valid user who can receive messages.
+        Warning: This is a best-effort check and may not be 100% accurate.
+        """
+        # Basic validation for test accounts or obviously invalid IDs
+        if not telegram_id or int(telegram_id) < 10000:
+            logger.warning(f"Telegram ID {telegram_id} appears to be invalid (too small)")
+            return False
+        
+        # Check if the user exists in our system
+        user_info = await self.make_request(
+            "GET",
+            f"{self.base_url}/students/",
+            params={"telegram_id": telegram_id}
+        )
+        
+        if not user_info or not isinstance(user_info, list) or len(user_info) == 0:
+            logger.warning(f"User with telegram_id {telegram_id} not found in database")
+            return False
+        
+        # Unfortunately, we can't reliably check if a user has blocked the bot or never
+        # started it without actually trying to send a message.
+        return True
