@@ -10,6 +10,8 @@ from mentors.views import MentorAvailabilityViewSet, MentorViewSet
 from payment.views import PaymentViewSet
 from rest_framework import permissions
 from rest_framework.routers import DefaultRouter
+from webinar.views import WebinarViewSet  # Add this import
+from progress.views import StudentProgressViewSet
 
 # Schema view for API documentation
 schema_view = get_schema_view(
@@ -31,6 +33,9 @@ router.register(r"courses", CourseViewSet)
 router.register(r"lessons", LessonViewSet)
 router.register(r"payments", PaymentViewSet)
 router.register(r"quizzes", QuizViewSet)
+router.register(r"progress", StudentProgressViewSet)
+router.register(r'webinars', WebinarViewSet)  # Add this line
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),

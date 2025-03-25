@@ -553,3 +553,79 @@ class APIClient:
         # Unfortunately, we can't reliably check if a user has blocked the bot or never
         # started it without actually trying to send a message.
         return True
+    
+    # Add to data/api_client.py
+    async def update_progress(self, student_id: int, lesson_id: int, quiz_score: int) -> Optional[Dict[str, Any]]:
+        """Update student progress with quiz score"""
+        try:
+            # Check if progress already exists
+            existing_progress = await self.make_request(
+                "GET",
+                f"{self.base_url}/progress/",
+                params={
+                    "student": student_id,
+                    "lesson": lesson_id
+                }
+            )
+            
+            progress_data = {
+                "student": student_id,
+                "lesson": lesson_id,
+                "quiz_score": quiz_score
+            }
+            
+            if existing_progress and isinstance(existing_progress, list) and len(existing_progress) > 0:
+                # Update existing progress
+                progress_id = existing_progress[0]["id"]
+                return await self.make_request(
+                    "PUT",
+                    f"{self.base_url}/progress/{progress_id}/",
+                    json=progress_data
+                )
+            else:
+                # Create new progress
+                return await self.make_request(
+                    "POST",
+                    f"{self.base_url}/progress/",
+                    json=progress_data
+                )
+        except Exception as e:
+            logger.error(f"Error updating progress: {e}")
+            return None
+    async def get_webinars(self, telegram_id: int = None) -> Optional[List[Dict[str, Any]]]:
+        """Get list of available webinars"""
+        try:
+            logger.info(f"Fetching webinars for user {telegram_id}")
+            
+            # Construct the URL for the webinars endpoint
+            url = f"{self.base_url}/webinars/"
+            
+            # Make the API request
+            webinars = await self.make_request(
+                "GET", 
+                url,
+                telegram_id=telegram_id
+            )
+            
+            if not webinars:
+                logger.warning(f"No webinars found or error in response for user {telegram_id}")
+                return []
+                
+            # Format the response for easier consumption by handlers
+            for webinar in webinars:
+                # Ensure mentor_details is available or create a placeholder
+                if "mentor" in webinar and not "mentor_details" in webinar:
+                    # Try to fetch mentor details
+                    mentor_id = webinar.get("mentor")
+                    mentor = await self.get_mentor_by_id(mentor_id)
+                    if mentor:
+                        webinar["mentor_details"] = mentor
+                    else:
+                        webinar["mentor_details"] = {"name": "Unknown Mentor"}
+            
+            logger.info(f"Found {len(webinars)} webinars for user {telegram_id}")
+            return webinars
+            
+        except Exception as e:
+            logger.error(f"Error fetching webinars: {e}")
+            return []

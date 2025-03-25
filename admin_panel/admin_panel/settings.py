@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "accounts",
     "progress",
     "payment",
+    "webinar",
     "rest_framework",
     "rest_framework.authtoken",
 ]
@@ -89,7 +90,7 @@ WSGI_APPLICATION = "admin_panel.wsgi.application"
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': os.getenv("dbname"), 
         'USER': os.getenv("user"),   
         'PASSWORD': os.getenv("password"),

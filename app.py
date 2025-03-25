@@ -7,12 +7,12 @@ import asyncio
 from data.api_client import APIClient
 from loader import dp, bot, i18n
 from config import API_TOKEN
-from handlers import courses, help, lessons, mentors, payment, start
+from handlers import courses, help, lessons, mentors, payment, start, quizzes, webinars
 from utils.set_bot_commands import set_commands
 from middlewares.auth import AuthMiddleware
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create single APIClient instance
@@ -22,13 +22,19 @@ api_client = APIClient()
 dp.message.middleware(AuthMiddleware(api_client))
 dp.callback_query.middleware(AuthMiddleware(api_client))
 
+dp.workflow_data.update({"throttling_key": None})
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("aiogram.dispatcher").setLevel(logging.DEBUG)
+
 # Include routers
 dp.include_router(start.router)
 dp.include_router(help.router)
+dp.include_router(webinars.router)
 dp.include_router(mentors.router)
 dp.include_router(courses.router)
 dp.include_router(lessons.router)
 dp.include_router(payment.router)
+dp.include_router(quizzes.router)
 
 
 async def main():

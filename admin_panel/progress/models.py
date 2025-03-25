@@ -9,6 +9,7 @@ class StudentProgress(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='progress')
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='progress')
     quiz_score = models.IntegerField(null=True, blank=True)
+    unlocked_by_quiz = models.BooleanField(default=False, help_text="Indicates if this lesson was unlocked by completing a previous quiz perfectly")
     completed_at = models.DateTimeField(default=timezone.now)
 
 

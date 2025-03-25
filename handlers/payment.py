@@ -7,14 +7,20 @@ from aiogram import F, Router
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import (CallbackQuery, InlineKeyboardButton,
-                           InlineKeyboardMarkup, Message)
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from dotenv import load_dotenv
 
 from data.api_client import APIClient
 from keyboards.menu import menu_keyboard
-from keyboards.payment_keyboard import (admin_confirmation_keyboard,
-                                        create_screenshot_keyboard)
+from keyboards.payment_keyboard import (
+    admin_confirmation_keyboard,
+    create_screenshot_keyboard,
+)
 from loader import bot
 from states.payment_state import PaymentState
 
@@ -58,31 +64,33 @@ async def validate_payment_data(
 async def notify_admins(bot, photo_id: str, payment_info: dict):
     """Notify admins about new payment"""
     success_count = 0
-    
+
     if not payment_info:
         logger.error("Cannot notify admins: payment_info is empty")
         return False
-        
-    payment_id = payment_info.get('id')
+
+    payment_id = payment_info.get("id")
     if not payment_id:
         logger.error("Cannot notify admins: payment_id is missing")
         return False
-        
-    student_id = payment_info.get('student')
+
+    student_id = payment_info.get("student")
     if not student_id:
-        logger.error(f"Cannot notify admins: student_id is missing for payment {payment_id}")
+        logger.error(
+            f"Cannot notify admins: student_id is missing for payment {payment_id}"
+        )
         return False
-    
+
     logger.info(f"Notifying admins about payment ID: {payment_id}")
     logger.info(f"Admin IDs to notify: {ADMIN_IDS}")
-    
+
     # Get course title or use a placeholder
-    course_details = payment_info.get('course_details', {})
-    course_title = course_details.get('title', 'Unknown Course')
-    
+    course_details = payment_info.get("course_details", {})
+    course_title = course_details.get("title", "Unknown Course")
+
     # Format payment amount with proper decimal places
     try:
-        amount = float(payment_info.get('amount', 0))
+        amount = float(payment_info.get("amount", 0))
     except (ValueError, TypeError):
         logger.error(f"Invalid amount format in payment {payment_id}")
         amount = 0
@@ -92,11 +100,11 @@ async def notify_admins(bot, photo_id: str, payment_info: dict):
 
     # Create keyboard with the payment ID
     keyboard = admin_confirmation_keyboard(student_id, payment_id)
-    
+
     for admin_id in ADMIN_IDS:
         try:
             logger.info(f"Sending payment notification to admin: {admin_id}")
-            
+
             await bot.send_photo(
                 admin_id,
                 photo_id,
@@ -113,12 +121,14 @@ async def notify_admins(bot, photo_id: str, payment_info: dict):
             logger.info(f"Successfully notified admin {admin_id}")
         except Exception as e:
             logger.error(f"Failed to notify admin {admin_id}: {e}")
-    
+
     if success_count == 0:
         logger.error("Failed to notify any admins")
     else:
-        logger.info(f"Successfully notified {success_count} admin(s) about payment {payment_id}")
-    
+        logger.info(
+            f"Successfully notified {success_count} admin(s) about payment {payment_id}"
+        )
+
     return success_count > 0
 
 
@@ -127,10 +137,14 @@ async def initiate_course_payment(message: Message, state: FSMContext, course: d
     try:
         user_id = message.from_user.id
         user_name = message.from_user.full_name
-        logger.info(f"Initiating payment flow for user {user_id}, course {course['id']}")
-        
+        logger.info(
+            f"Initiating payment flow for user {user_id}, course {course['id']}"
+        )
+
         # Check if the user has already purchased this course
-        has_purchased = await api_client.check_user_purchase(user_id, course["id"], name=user_name)
+        has_purchased = await api_client.check_user_purchase(
+            user_id, course["id"], name=user_name
+        )
         if has_purchased:
             logger.info(f"User {user_id} has already purchased course {course['id']}")
             await message.answer(
@@ -153,20 +167,22 @@ async def initiate_course_payment(message: Message, state: FSMContext, course: d
         )
 
         if not payment:
-            logger.error(f"Failed to create payment record for user {user_id}, course {course['id']}")
+            logger.error(
+                f"Failed to create payment record for user {user_id}, course {course['id']}"
+            )
             await message.answer(
                 "Error creating payment record. Please try again later."
             )
             return False
 
         payment_id = payment["id"]
-        logger.info(f"Using payment record {payment_id} for user {user_id}, course {course['id']}")
+        logger.info(
+            f"Using payment record {payment_id} for user {user_id}, course {course['id']}"
+        )
 
         # Store payment data in user state
-        await state.update_data(
-            {"payment_id": payment_id, "course_id": course["id"]}
-        )
-        
+        await state.update_data({"payment_id": payment_id, "course_id": course["id"]})
+
         # Format payment amount with proper decimal places
         amount = float(course["price"])
 
@@ -187,12 +203,16 @@ async def initiate_course_payment(message: Message, state: FSMContext, course: d
 
         # Set state to await screenshot
         await state.set_state(PaymentState.AWAITING_SCREENSHOT)
-        logger.info(f"Payment flow initiated successfully for user {user_id}, payment {payment_id}")
+        logger.info(
+            f"Payment flow initiated successfully for user {user_id}, payment {payment_id}"
+        )
         return True
 
     except Exception as e:
         logger.error(f"Error initiating payment for user {message.from_user.id}: {e}")
-        await message.answer("Error processing payment request. Please try again later.")
+        await message.answer(
+            "Error processing payment request. Please try again later."
+        )
         return False
 
 
@@ -203,12 +223,14 @@ async def show_payment_details(message: Message, state: FSMContext):
         user_id = message.from_user.id
         user_name = message.from_user.full_name
         logger.info(f"Payment button pressed by user {user_id} ({user_name})")
-        
+
         data = await state.get_data()
         course_id = data.get("course_id")
 
         if not course_id:
-            logger.warning(f"User {user_id} tried to make payment without selecting a course")
+            logger.warning(
+                f"User {user_id} tried to make payment without selecting a course"
+            )
             await message.answer("Please select a course first.")
             return
 
@@ -228,9 +250,7 @@ async def show_payment_details(message: Message, state: FSMContext):
             return
 
         # Get course details
-        course = await api_client.get_course_by_id(
-            course_id, telegram_id=user_id
-        )
+        course = await api_client.get_course_by_id(course_id, telegram_id=user_id)
         if not course:
             logger.error(f"Course {course_id} not found for user {user_id}")
             await message.answer("Course not found.")
@@ -241,21 +261,22 @@ async def show_payment_details(message: Message, state: FSMContext):
 
         # Create payment record (or get existing one)
         payment = await api_client.create_payment(
-            student_id=user_id,
-            course_id=course_id,
-            amount=amount,
-            telegram_id=user_id
+            student_id=user_id, course_id=course_id, amount=amount, telegram_id=user_id
         )
 
         if not payment:
-            logger.error(f"Failed to create payment record for user {user_id}, course {course_id}")
+            logger.error(
+                f"Failed to create payment record for user {user_id}, course {course_id}"
+            )
             await message.answer(
                 "Error creating payment record. Please try again later."
             )
             return
 
         payment_id = payment["id"]
-        logger.info(f"Using payment record {payment_id} for user {user_id}, course {course_id}")
+        logger.info(
+            f"Using payment record {payment_id} for user {user_id}, course {course_id}"
+        )
 
         # Store BOTH payment_id and course_id in state
         await state.update_data({"payment_id": payment_id, "course_id": course_id})
@@ -280,7 +301,9 @@ async def show_payment_details(message: Message, state: FSMContext):
         logger.info(f"Payment flow initiated for user {user_id}, payment {payment_id}")
 
     except Exception as e:
-        logger.error(f"Error showing payment details for user {message.from_user.id}: {e}")
+        logger.error(
+            f"Error showing payment details for user {message.from_user.id}: {e}"
+        )
         await message.answer("An error occurred. Please try again later.")
 
 
@@ -293,8 +316,8 @@ async def handle_screenshot(message: Message, state: FSMContext):
             logger.info(f"User {message.from_user.id} cancelled payment")
             await state.clear()
             await message.answer(
-                "Payment cancelled. You can select a course again.", 
-                reply_markup=menu_keyboard(message.from_user.id)
+                "Payment cancelled. You can select a course again.",
+                reply_markup=menu_keyboard(message.from_user.id),
             )
             return
 
@@ -313,14 +336,16 @@ async def handle_screenshot(message: Message, state: FSMContext):
             logger.error(f"Payment session expired for user {message.from_user.id}")
             await message.answer(
                 "Payment session expired. Please try selecting a course again.",
-                reply_markup=menu_keyboard(message.from_user.id)
+                reply_markup=menu_keyboard(message.from_user.id),
             )
             await state.clear()
             return
 
         # Get the largest photo (best quality)
         photo = message.photo[-1]
-        logger.info(f"Received payment screenshot from user {message.from_user.id} for payment {payment_id}")
+        logger.info(
+            f"Received payment screenshot from user {message.from_user.id} for payment {payment_id}"
+        )
 
         # Save screenshot to payment record
         result = await api_client.make_request(
@@ -354,15 +379,19 @@ async def handle_screenshot(message: Message, state: FSMContext):
 
         # Notify admins about the new payment screenshot
         if await notify_admins(bot, photo.file_id, payment_info):
-            course_title = payment_info.get("course_details", {}).get("title", "the course")
-            
+            course_title = payment_info.get("course_details", {}).get(
+                "title", "the course"
+            )
+
             await message.answer(
                 f"✅ Thank you! Your payment for *{course_title}* is being verified by administrators.\n\n"
                 "We'll notify you once your payment is confirmed. After that, you'll be able to access all lessons in the course.",
                 reply_markup=menu_keyboard(message.from_user.id),
                 parse_mode="Markdown",
             )
-            logger.info(f"Payment verification process started for payment {payment_id}")
+            logger.info(
+                f"Payment verification process started for payment {payment_id}"
+            )
             await state.clear()
         else:
             logger.error(f"Failed to notify admins about payment {payment_id}")
@@ -390,13 +419,15 @@ async def handle_admin_verification(callback: CallbackQuery):
         admin_ids = os.getenv("ADMIN_ID", "").split(",")
         logger.info(f"Admin verification attempt by user ID: {admin_id}")
         logger.info(f"Configured admin IDs: {admin_ids}")
-        
+
         # Enhanced admin validation with additional logging
         is_admin = str(admin_id) in admin_ids
         logger.info(f"Is user {admin_id} an admin? {is_admin}")
-        
+
         if not is_admin:
-            logger.warning(f"Unauthorized payment verification attempt by user ID: {admin_id}")
+            logger.warning(
+                f"Unauthorized payment verification attempt by user ID: {admin_id}"
+            )
             await callback.answer("Unauthorized action", show_alert=True)
             return
 
@@ -411,59 +442,86 @@ async def handle_admin_verification(callback: CallbackQuery):
             logger.error(f"Invalid callback data: {callback.data}")
             await callback.answer("Invalid action", show_alert=True)
             return
-            
+
         payment_id = parts[0]
         # If user_id is included in callback data, extract it
-        user_id = parts[1] if len(parts) > 1 else None
-        
+        student_db_id = parts[1] if len(parts) > 1 else None
+
         is_confirm = action == "confirm"
         logger.info(f"Admin {admin_id} is {action}ing payment {payment_id}")
-        
+
         # Ensure admin is registered
-        if not await api_client.ensure_user_exists(telegram_id=admin_id, name=admin_name):
+        if not await api_client.ensure_user_exists(
+            telegram_id=admin_id, name=admin_name
+        ):
             logger.error(f"Failed to register admin {admin_id}")
-            await callback.answer("Registration failed. Please try again.", show_alert=True)
+            await callback.answer(
+                "Registration failed. Please try again.", show_alert=True
+            )
             return
 
         # Get payment details before updating status
         payment_info = await api_client.get_payment_details(payment_id, admin_id)
-        logger.info(f"Payment details retrieved for payment {payment_id}: {payment_info}")
-        
+        logger.info(
+            f"Payment details retrieved for payment {payment_id}: {payment_info}"
+        )
+
         if not payment_info:
-            # If payment details can't be retrieved but we have the user_id from the callback
+            # If payment details can't be retrieved but we have the student_db_id from the callback
             # we can still proceed with the confirmation/rejection
-            if not user_id:
-                logger.error(f"Failed to get payment details for payment {payment_id} and no user_id provided")
-                await callback.answer("Failed to get payment information", show_alert=True)
+            if not student_db_id:
+                logger.error(
+                    f"Failed to get payment details for payment {payment_id} and no student_db_id provided"
+                )
+                await callback.answer(
+                    "Failed to get payment information", show_alert=True
+                )
                 return
             else:
-                logger.warning(f"Proceeding with {action} for payment {payment_id} without full payment details")
+                logger.warning(
+                    f"Proceeding with {action} for payment {payment_id} without full payment details"
+                )
         else:
-            # Extract user_id from payment info if not already provided
-            user_id = user_id or payment_info.get("student")
-            
-        if not user_id:
-            logger.error(f"No user ID found for payment {payment_id}")
+            # Extract student_db_id from payment info if not already provided
+            student_db_id = student_db_id or payment_info.get("student")
+
+        if not student_db_id:
+            logger.error(f"No student database ID found for payment {payment_id}")
             await callback.answer("Invalid payment information", show_alert=True)
             return
-            
-        # Extract course title if available, use placeholder if not
-        course_title = payment_info.get("course_details", {}).get("title", "the course") if payment_info else "the course"
 
-        # Update payment status using new methods
+        # Extract student details and Telegram ID
+        student_details = payment_info.get("student_details", {})
+        telegram_id = student_details.get("telegram_id")
+
+        if not telegram_id:
+            logger.error(
+                f"No Telegram ID found in student details for payment {payment_id}"
+            )
+            await callback.answer("Failed to get user's Telegram ID", show_alert=True)
+            return
+
+        # Extract course title if available, use placeholder if not
+        user_name = student_details.get("name")
+        course_title = payment_info.get("course_details", {}).get("title", "the course")
+
+        # Update payment status using API methods
         result = False
         if is_confirm:
             # Attempt to confirm with API
             result = await api_client.confirm_payment(payment_id, admin_id, admin_name)
             if not result:
-                # If API fails, pretend it worked for now
-                logger.warning(f"API call failed but proceeding as if confirmation succeeded for payment {payment_id}")
+                logger.warning(
+                    f"API call failed but proceeding as if confirmation succeeded for payment {payment_id}"
+                )
                 result = True  # Force success for testing
         else:
             # Similar approach for cancel
             result = await api_client.cancel_payment(payment_id, admin_id, admin_name)
             if not result:
-                logger.warning(f"API call failed but proceeding as if cancellation succeeded for payment {payment_id}")
+                logger.warning(
+                    f"API call failed but proceeding as if cancellation succeeded for payment {payment_id}"
+                )
                 result = True  # Force success for testing
 
         if not result:
@@ -471,74 +529,70 @@ async def handle_admin_verification(callback: CallbackQuery):
             await callback.answer(f"Failed to {action} payment", show_alert=True)
             return
 
-        # Notify user
+        # Notify user using their Telegram ID, not database ID
         try:
-            # Get user information for notification
-            user_info = await api_client.make_request(
-                "GET",
-                f"{api_client.base_url}/students/?telegram_id={user_id}",
-                telegram_id=admin_id
+            # Prepare notification message
+            message = (
+                f"✅ Your payment for *{course_title}* has been confirmed! You now have access to all lessons in the course."
+                if is_confirm
+                else f"❌ Your payment for *{course_title}* has been rejected. Please contact support for assistance."
             )
-            
-            if not user_info or not isinstance(user_info, list) or len(user_info) == 0:
-                logger.error(f"Failed to get user information for user {user_id}")
-                await callback.answer(f"Payment {action}ed, but failed to notify user (user not found in database)", show_alert=True)
-                return
-            
-            user_name = user_info[0]["name"]
-            
-            # Check if this is a test user ID (too small to be real)
-            # if int(user_id) < 10000:  # Real Telegram IDs are much larger
-            #     logger.warning(f"Not sending notification to likely test user ID: {user_id}")
-            #     await callback.answer(f"Payment {action}ed. Warning: User ID {user_id} appears to be a test ID, notification skipped.", show_alert=True)
-                
-            #     # Skip sending notification but update admin message
-            #     status_icon = "✅" if is_confirm else "❌"
-            #     status_text = "Confirmed" if is_confirm else "Rejected"
-                
-            #     await callback.message.edit_caption(
-            #         callback.message.caption + f"\n\n{status_icon} {status_text}",
-            #         reply_markup=None,
-            #     )
-            #     logger.info(f"Updated admin message for payment {payment_id}")
-            #     return
-            
-            # Ensure user is registered before sending notification
-            if user_name and await api_client.ensure_user_exists(telegram_id=user_id, name=user_name):
-                message = (
-                    f"✅ Your payment for *{course_title}* has been confirmed! You now have access to all lessons in the course."
-                    if is_confirm
-                    else f"❌ Your payment for *{course_title}* has been rejected. Please contact support for assistance."
-                )
 
+            # Ensure user exists before sending notification
+            if await api_client.ensure_user_exists(
+                telegram_id=telegram_id, name=user_name
+            ):
                 try:
+                    # Send notification to the user's Telegram ID
                     await bot.send_message(
-                        int(user_id), 
+                        int(telegram_id),  # Use telegram_id instead of database ID
                         message,
-                        reply_markup=menu_keyboard(user_id),
-                        parse_mode="Markdown"
+                        reply_markup=menu_keyboard(telegram_id),
+                        parse_mode="Markdown",
                     )
-                    logger.info(f"Notification sent to user {user_id} about {action}ed payment")
+                    logger.info(
+                        f"Notification sent to user {telegram_id} about {action}ed payment"
+                    )
                 except Exception as msg_err:
                     error_detail = str(msg_err)
                     if "chat not found" in error_detail.lower():
-                        logger.error(f"Chat not found for user {user_id} - they may have never started the bot or blocked it")
-                        await callback.answer(f"Payment {action}ed, but user {user_id} has not started the bot or has blocked it", show_alert=True)
+                        logger.error(
+                            f"Chat not found for user with Telegram ID {telegram_id} - they may have never started the bot or blocked it"
+                        )
+                        await callback.answer(
+                            f"Payment {action}ed, but user with Telegram ID {telegram_id} has not started the bot or has blocked it",
+                            show_alert=True,
+                        )
                     else:
-                        logger.error(f"Error sending notification to user {user_id}: {msg_err}")
-                        await callback.answer(f"Payment {action}ed, but failed to notify user: {error_detail}", show_alert=True)
+                        logger.error(
+                            f"Error sending notification to user with Telegram ID {telegram_id}: {msg_err}"
+                        )
+                        await callback.answer(
+                            f"Payment {action}ed, but failed to notify user: {error_detail}",
+                            show_alert=True,
+                        )
             else:
-                logger.error(f"Could not register user {user_id} for notification")
-                await callback.answer(f"Payment {action}ed, but could not register user for notification", show_alert=True)
+                logger.error(
+                    f"Could not register user with Telegram ID {telegram_id} for notification"
+                )
+                await callback.answer(
+                    f"Payment {action}ed, but could not register user for notification",
+                    show_alert=True,
+                )
         except Exception as e:
-            logger.error(f"Failed to send notification to user {user_id}: {e}")
-            await callback.answer(f"Payment {action}ed, but failed to notify user due to an error", show_alert=True)
+            logger.error(
+                f"Failed to send notification to user with Telegram ID {telegram_id}: {e}"
+            )
+            await callback.answer(
+                f"Payment {action}ed, but failed to notify user due to an error",
+                show_alert=True,
+            )
 
         # Update admin message
         try:
             status_icon = "✅" if is_confirm else "❌"
             status_text = "Confirmed" if is_confirm else "Rejected"
-            
+
             await callback.message.edit_caption(
                 callback.message.caption + f"\n\n{status_icon} {status_text}",
                 reply_markup=None,
